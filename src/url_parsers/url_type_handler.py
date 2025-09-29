@@ -189,9 +189,9 @@ def handle_url(models: Dict[str, List[Optional[str]]]) -> Dict[str, dict]:
 
         metric_latency_map = {
             "ramp_up_time": "hf_model_latency",
-            "bus_factor": "github_latency",
+            # "bus_factor": "github_latency",
             "performance_claims": "hf_model_latency",
-            "license_compliance": "github_latency",
+            # "license_compliance": "github_latency",
             "size": "hf_model_latency",
             "availability": "availability_latency",
             "dataset_quality": "hf_dataset_latency",
@@ -213,7 +213,10 @@ def handle_url(models: Dict[str, List[Optional[str]]]) -> Dict[str, dict]:
         size_metric = results.get("size")
         size_score = size_metric.details.get(
             "size_score") if size_metric and hasattr(size_metric, "details") else None
-
+        license_metric = results.get("license_compliance")
+        license_seconds = license_metric.seconds * 1000 if license_metric else None
+        bus_factor_metric = results.get("bus_factor")
+        bus_factor_seconds = bus_factor_metric.seconds * 1000 if bus_factor_metric else None
         ndjson_args = {
             # summary
             "net_score": float(summary.get("net_score", 0.0)),
@@ -222,11 +225,11 @@ def handle_url(models: Dict[str, List[Optional[str]]]) -> Dict[str, dict]:
             "ramp_up_time": get_metric("ramp_up_time"),
             "ramp_up_time_latency": get_latency("ramp_up_time"),
             "bus_factor": get_metric("bus_factor"),
-            "bus_factor_latency": get_latency("bus_factor"),
+            "bus_factor_latency": bus_factor_seconds,
             "performance_claims": get_metric("performance_claims"),
             "performance_claims_latency": get_latency("performance_claims"),
             "license": get_metric("license_compliance"),
-            "license_latency": get_latency("license_compliance"),
+            "license_latency": license_seconds,
             "raspberry_pi": size_score.get("raspberry_pi") if isinstance(size_score, dict) else None,
             "jetson_nano": size_score.get("jetson_nano") if isinstance(size_score, dict) else None,
             "desktop_pc": size_score.get("desktop_pc") if isinstance(size_score, dict) else None,
