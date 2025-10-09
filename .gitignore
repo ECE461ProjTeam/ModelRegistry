@@ -12,3 +12,5 @@ setup_github_tokens.sh
 log.log
 hf_cache/
 venv/
+docs/
+reports/
