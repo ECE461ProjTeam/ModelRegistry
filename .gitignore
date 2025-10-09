@@ -11,3 +11,4 @@ setup_github_tokens.sh
 .venv/
 log.log
 hf_cache/
+venv/
