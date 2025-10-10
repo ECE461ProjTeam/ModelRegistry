@@ -1,3 +1,0 @@
-https://github.com/google-research/bert, https://huggingface.co/datasets/bookcorpus/bookcorpus, https://huggingface.co/google-bert/bert-base-uncased
-,,https://huggingface.co/parvk11/audience_classifier_model
-,,https://huggingface.co/openai/whisper-tiny/tree/main
