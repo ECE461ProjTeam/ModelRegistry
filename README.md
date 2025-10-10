@@ -1,12 +1,14 @@
-# Team4Hope — CLI for Trustworthy Model Re-use
+# Trustworthy Model Registry
 
 ## Quick start
+### Set up virtual environment and install dependencies
 python -m venv .venv && source .venv/bin/activate
 pip install -r requirements.txt
-./run https://huggingface.co/bert-base-uncased
 
-## Development
-- Branch per area: cli-<name>, metrics-<name>, urls-<name>, qa-<name>
-- Tests: pytest (aim for ≥20 tests, ≥80% coverage)
-- Output: stdout (supports --ndjson)
-- Logging: use LOG_VERBOSITY, LOG_PATH
+### Set up environment variables
+- `LOG_FILE` - Name of the log file
+- `LOG_VERBOSITY` - Verbosity of logging (0 - silent, 1 - INFO, 2 - DEBUG)
+- `GITHUB_TOKEN` - Your GitHub token
+- `GEN_AI_STUDIO_API_KEY` - Purdue GenAI Studio API key 
+Note: You can obtain the `GEN_AI_STUDIO_API_KEY` at https://genai.rcac.purdue.edu/ by logging in to your Purdue student account, click on your profile -> Settings -> Account -> API Keys and then create one.
+
