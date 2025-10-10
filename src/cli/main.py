@@ -13,8 +13,6 @@ def _check_env_variables() -> None:
     log_file = os.getenv("LOG_FILE")
     log_level = os.getenv("LOG_LEVEL")
 
-    print(f"LOG_FILE={log_file}, LOG_LEVEL={log_level}, GITHUB_TOKEN={tok}")
-
     # Per spec: default verbosity is 0 if not set
     verbosity = int(log_level) if log_level is not None else 0
     if verbosity < 0 or verbosity > 2:

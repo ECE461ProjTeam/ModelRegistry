@@ -1,4 +1,0 @@
-#!/usr/bin/env bash
-# bin/run: actual executable that runs the CLI (keeps behavior of original root `run`)
-DIR=$(cd "$(dirname "$0")" && pwd)
-PYTHONPATH="$DIR/../src" exec python3 -c "import sys, os; sys.path.insert(0, os.path.join(os.path.dirname(__file__), '../src')); from src.cli.main import main; raise SystemExit(main())" "$@"
