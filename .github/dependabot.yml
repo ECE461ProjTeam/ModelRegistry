@@ -1,0 +1,12 @@
+# .github/dependabot.yml
+version: 2
+updates:
+  - package-ecosystem: "pip"
+    directory: "/ModelRegistry"        # contains requirements.txt
+    schedule:
+      interval: "weekly"               # daily | weekly | monthly
+      day: "monday"
+      time: "09:00"
+      timezone: "America/Indiana/Indianapolis"
+    open-pull-requests-limit: 5
+    labels: ["dependencies", "automated"]
