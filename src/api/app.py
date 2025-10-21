@@ -102,5 +102,5 @@ def get_tracks():
 
 
 if __name__ == '__main__':
-    ## Init registry rn it's just a 
+    # Can test with curl -X <METHOD> http://127.0.0.1:5000/<command>
     app.run(host='0.0.0.0', port=5000, debug=True)
