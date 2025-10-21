@@ -98,7 +98,10 @@ def ArtifactByRegExGet():
 @app.route('/tracks', methods=['GET'])
 def get_tracks():
     """No description provided."""
-    return jsonify(["Access control track"]), 200
+    try: 
+        return jsonify({"plannedTracks": ["Access control track"],}), 200
+    except Exception as e: 
+        return jsonify({'error': str(e)}), 500
 
 
 if __name__ == '__main__':
