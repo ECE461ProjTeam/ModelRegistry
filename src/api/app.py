@@ -1,5 +1,7 @@
 from flask import Flask, jsonify, request
 
+plannedTracks = ["Access control track"]
+
 app = Flask(__name__)
 
 
@@ -99,7 +101,7 @@ def ArtifactByRegExGet():
 def get_tracks():
     """No description provided."""
     try: 
-        return jsonify({"plannedTracks": ["Access control track"],}), 200
+        return jsonify({"plannedTracks": plannedTracks}), 200
     except Exception as e: 
         return jsonify({'error': str(e)}), 500
 
