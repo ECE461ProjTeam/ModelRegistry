@@ -2,4 +2,4 @@ requests==2.32.3
 huggingface_hub==0.24.6
 datasets==3.0.2
 pytest==8.3.3
-pytest-cov==5.1.0
+pytest-cov==7.0.0
