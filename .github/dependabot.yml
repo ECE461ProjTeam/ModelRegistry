@@ -2,7 +2,7 @@
 version: 2
 updates:
   - package-ecosystem: "pip"
-    directory: "/ModelRegistry"        # contains requirements.txt
+    directory: "/"                     # contains requirements.txt
     schedule:
       interval: "weekly"               # daily | weekly | monthly
       day: "monday"
@@ -10,3 +10,6 @@ updates:
       timezone: "America/Indiana/Indianapolis"
     open-pull-requests-limit: 5
     labels: ["dependencies", "automated"]
+    commit-message:
+      prefix: "deps"
+      include: "scope"
