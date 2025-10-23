@@ -1,6 +1,10 @@
 from flask import Flask, jsonify, request
+from .classes import *
+from src.logger import get_logger
+logger = get_logger("api.app")
 
 plannedTracks = ["Access control track"]
+model_registry = []
 
 app = Flask(__name__)
 
@@ -14,13 +18,23 @@ def ArtifactsList():
 
     In the Request Body below, "version" has all the possible inputs. The "version" cannot be a combination of the different possibilities.
     """
-    return jsonify({'message': 'Not implemented-artifacts'}), 501
+    res = {}
+    for model in model_registry:
+        res[model.name] = {
+            'type': model.type,
+            'url': model.url,
+            'version': "NOTIMPLEMENTED",
+            'id': model.id
+        }
+    return jsonify(res), 200
 
 
 @app.route('/reset', methods=['DELETE'])
 def RegistryReset():
     """Reset the registry to a system default state."""
-    return jsonify({'message': 'Not implemented'}), 501
+    logger.info("Resetting the model registry to default state.")
+    model_registry.clear()
+    return jsonify({'description': 'Registry is reset.'}), 200
 
 
 @app.route('/artifacts/<artifact_type>/<id>', methods=['GET'])
@@ -46,7 +60,18 @@ def ArtifactCreate(artifact_type):
     """Register a new artifact by providing a downloadable source URL. Artifacts may share a name with existing entries if their version differs.
     Refer to the description above to see how an id is formed for an artifact.
     """
-    return jsonify({'message': 'Not implemented'}), 501
+    try:
+        logger.info(f"Creating new artifact of type {artifact_type}")
+        data = request.get_json()
+        url = data.get("url")
+        newModel = Model(url)
+        logger.info(f"Created new model artifact with name: {newModel.name}")
+        model_registry.append(newModel)
+        return jsonify({'name': newModel.name, 'version': "NOTIMPLEMENTED", 'id': newModel.id, 'type': newModel.type}), 201
+    except Exception as e:
+        return jsonify({'description': 
+            'There is missing field(s) in the artifact_data or it is formed improperly (must include a single url)'}), 400
+        
 
 
 @app.route('/artifact/model/<id>/rate', methods=['GET'])
@@ -106,6 +131,6 @@ def get_tracks():
         return jsonify({'error': str(e)}), 500
 
 
-if __name__ == '__main__':
-    # Can test with curl -X <METHOD> http://127.0.0.1:5000/<command>
+def run_api():
+    model_registry = []
     app.run(host='0.0.0.0', port=5000, debug=True)
