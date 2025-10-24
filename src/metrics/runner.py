@@ -22,6 +22,8 @@ def build_registry_from_plan() -> MetricRegistry:
     from .impl.code_quality import CodeQualityMetric
     from .impl.performance_claims import PerformanceClaimsMetric
 
+    from .impl.reviewedness import ReviewednessMetric
+
     reg = MetricRegistry()
     reg.register(SizeMetric())
     reg.register(LicenseComplianceMetric())
@@ -31,6 +33,7 @@ def build_registry_from_plan() -> MetricRegistry:
     reg.register(DatasetQualityMetric())
     reg.register(CodeQualityMetric())
     reg.register(PerformanceClaimsMetric())
+    reg.register(ReviewednessMetric())
     return reg
 
 

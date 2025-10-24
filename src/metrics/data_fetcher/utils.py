@@ -11,11 +11,26 @@ from src.logger import get_logger
 logger = get_logger("data_fetcher.utils")
 
 
-def safe_request(url: str, timeout: int = 10, **
+def safe_request(url: str, timeout: int = 10, method: str = "GET",
+                 json_data: Optional[Dict[str, Any]] = None, **
                  kwargs) -> Optional[requests.Response]:
-    """Make a safe HTTP GET request with error handling."""
+    """Make a safe HTTP request with error handling.
+    
+    Args:
+        url: The URL to request
+        timeout: Request timeout in seconds
+        method: HTTP method (GET, POST, etc.)
+        json_data: JSON data for POST requests
+        **kwargs: Additional arguments passed to requests
+        
+    Returns:
+        Response object or None if request failed
+    """
     try:
-        resp = requests.get(url, timeout=timeout, **kwargs)
+        if method.upper() == "POST":
+            resp = requests.post(url, json=json_data, timeout=timeout, **kwargs)
+        else:
+            resp = requests.get(url, timeout=timeout, **kwargs)
         resp.raise_for_status()
         return resp
     except Exception as e:
