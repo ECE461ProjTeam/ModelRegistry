@@ -11,7 +11,10 @@ class Model(Artifact):
     def __init__(self, url):
         super().__init__(url)
         self.type = "model"
-        ndjson = default_ndjson(self.url, category=self.type)
+        try:
+            ndjson = default_ndjson(self.url, category=self.type)
+        except ValueError:
+            raise ValueError("Invalid model URL")
         self.name = ndjson['name']
         self.id = str(hash(self.url) + sys.maxsize + 1)
         self.metadata = {'name': self.name, 'id': self.id, 'type': self.type}

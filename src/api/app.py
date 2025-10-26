@@ -135,6 +135,8 @@ def ArtifactCreate(artifact_type):
 @app.route('/artifact/model/<id>/rate', methods=['GET'])
 def ModelArtifactRate(id):
     """Get ratings for this model artifact. (BASELINE)."""
+    
+    
     return jsonify({'message': 'Not implemented'}), 501
 
 
