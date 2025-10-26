@@ -16,10 +16,8 @@ class Model(Artifact):
         else:
             raise ValueError("Invalid model URL")
         self.id = hash(self.url)
+        self.metadata = {'name': self.name, 'id': self.id, 'type': self.type}   
         
-        
-
-
 class Dataset(Artifact):
     def __init__(self, url):
         super().__init__(url)

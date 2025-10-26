@@ -1,10 +1,11 @@
 from flask import Flask, jsonify, request
 from .classes import *
 from src.logger import get_logger
+from .auth import authenticate, getPermissionLevel
 logger = get_logger("api.app")
 
 plannedTracks = ["Access control track"]
-model_registry = []
+model_registry = {}
 
 app = Flask(__name__)
 
@@ -16,22 +17,43 @@ def ArtifactsList():
     If you want to enumerate all artifacts, provide an array with a single artifact_query whose name is "*".
     The response is paginated; the response header includes the offset to use in the next query.
 
-    In the Request Body below, "version" has all the possible inputs. The "version" cannot be a combination of the different possibilities.
     """
+    
+    if not authenticate():
+        return jsonify({'description': 'Authentication failed due to invalid or missing AuthenticationToken.'}), 403
+    
     res = {}
-    for model in model_registry:
-        res[model.name] = {
-            'type': model.type,
-            'url': model.url,
-            'version': "NOTIMPLEMENTED",
-            'id': model.id
-        }
+    try:
+        data = request.get_json()
+        name = data.get("name")
+        types = data.get("types")
+        if name is None or types is None:
+            raise ValueError("Missing fields")
+    except Exception as e:
+        return jsonify({'description': 'There is missing field(s) in the artifact_query or it is formed improperly, or is invalid.'}), 400
+    
+    for model in model_registry.values():
+        if model.type in types:
+            res[model.name] = {
+                'type': model.type,
+                'url': model.url,
+                'id': model.id
+            }
+    #TODO: pagination?
+    #TODO: too many artifacts?
     return jsonify(res), 200
 
 
 @app.route('/reset', methods=['DELETE'])
 def RegistryReset():
     """Reset the registry to a system default state."""
+    
+    if not authenticate():
+        return jsonify({'description': 'Authentication failed due to invalid or missing AuthenticationToken.'}), 403
+    
+    if getPermissionLevel() != "admin":
+        return jsonify({'description': 'You do not have permission to reset the registry.'}), 401
+    
     logger.info("Resetting the model registry to default state.")
     model_registry.clear()
     return jsonify({'description': 'Registry is reset.'}), 200
@@ -66,8 +88,8 @@ def ArtifactCreate(artifact_type):
         url = data.get("url")
         newModel = Model(url)
         logger.info(f"Created new model artifact with name: {newModel.name}")
-        model_registry.append(newModel)
-        return jsonify({'name': newModel.name, 'version': "NOTIMPLEMENTED", 'id': newModel.id, 'type': newModel.type}), 201
+        model_registry[newModel.id] = newModel  # change to work with S3
+        return jsonify({'name': newModel.name, 'id': newModel.id, 'type': newModel.type}), 201
     except Exception as e:
         return jsonify({'description': 
             'There is missing field(s) in the artifact_data or it is formed improperly (must include a single url)'}), 400
@@ -132,5 +154,4 @@ def get_tracks():
 
 
 def run_api():
-    model_registry = []
     app.run(host='0.0.0.0', port=5000, debug=True)
