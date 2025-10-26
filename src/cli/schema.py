@@ -32,7 +32,8 @@ def default_ndjson(
         if hf_match:
             name = hf_match.group(2)
         else:
-            name = model.rstrip("/").split("/")[-1]
+            # name = model.rstrip("/").split("/")[-1]
+            raise ValueError("Invalid model URL")
     else:
         name = None
 

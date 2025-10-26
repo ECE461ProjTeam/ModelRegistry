@@ -106,7 +106,7 @@ def ArtifactUpdate(artifact_type, id):
 
     return jsonify({'description': 'Artifact does not exist.'}), 404
 
-
+# NON-BASELINE
 @app.route('/artifacts/<artifact_type>/<id>', methods=['DELETE'])
 def ArtifactDelete(artifact_type, id):
     """Delete only the artifact that matches 'id'. (id is a unique identifier for an artifact)."""
