@@ -1,9 +1,26 @@
 from flask import Flask, jsonify, request
+import json
+import re
 
 plannedTracks = ["Access control track"]
 
 app = Flask(__name__)
 
+
+REGISTRY_FILE = "src/api/data/registry.json"
+
+
+def load_registry():
+    """Load model entries from registry.json (temporary database)."""
+    try:
+        with open(REGISTRY_FILE, "r") as f:
+            return json.load(f)
+    except FileNotFoundError:
+        print("[WARN] registry.json not found. Returning empty list.")
+        return []
+    except json.JSONDecodeError:
+        print("[ERROR] registry.json is malformed. Returning empty list.")
+        return []
 
 @app.route('/artifacts', methods=['POST'])
 def ArtifactsList():
@@ -14,7 +31,39 @@ def ArtifactsList():
 
     In the Request Body below, "version" has all the possible inputs. The "version" cannot be a combination of the different possibilities.
     """
-    return jsonify({'message': 'Not implemented-artifacts'}), 501
+    try:
+        data = request.get_json(force=True)
+        queries = data.get("artifact_query", [])
+        offset = int(data.get("offset", 0))
+        limit = min(int(data.get("limit", 50)), 100)  # Prevent abuse
+
+        models = load_registry()
+        results = []
+
+        # If query == "*", return all artifacts paginated
+        if len(queries) == 1 and queries[0].get("name") == "*":
+            results = models[offset: offset + limit]
+        else:
+            # Simple regex search (for future regex-based enumeration)
+            for q in queries:
+                name_pattern = q.get("name", "")
+                try:
+                    pattern = re.compile(name_pattern)
+                    matches = [m for m in models if pattern.search(m["name"])]
+                    results.extend(matches)
+                except re.error:
+                    continue
+
+        next_offset = offset + limit if offset + limit < len(models) else None
+
+        return jsonify({
+            "artifacts": results,
+            "count": len(results),
+            "next_offset": next_offset
+        }), 200
+
+    except Exception as e:
+        return jsonify({"error": str(e)}), 500
 
 
 @app.route('/reset', methods=['DELETE'])

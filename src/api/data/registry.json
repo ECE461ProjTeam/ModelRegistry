@@ -1,0 +1,5 @@
+[
+  { "id": "hf_model_1", "name": "bert-base-uncased", "version": "1.0.0" },
+  { "id": "hf_model_2", "name": "gpt2", "version": "2.1.0" },
+  { "id": "hf_model_3", "name": "mistral-7b", "version": "1.3.0" }
+]

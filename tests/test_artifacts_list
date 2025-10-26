@@ -1,0 +1,12 @@
+import json
+from src.api.app import app
+
+client = app.test_client()
+
+def test_artifacts_list_all():
+    payload = {"artifact_query": [{"name": "*"}]}
+    resp = client.post("/artifacts", json=payload)
+    assert resp.status_code == 200
+    data = json.loads(resp.data)
+    assert "artifacts" in data
+    assert isinstance(data["artifacts"], list)
