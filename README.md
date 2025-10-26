@@ -14,3 +14,7 @@
 
 Note: You can obtain the `GEN_AI_STUDIO_API_KEY` at https://genai.rcac.purdue.edu/ by logging in to your Purdue student account, click on your profile -> Settings -> Account -> API Keys and then create one.
 
+### Run API server
+
+```run api```
+

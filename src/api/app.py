@@ -103,6 +103,7 @@ def ArtifactUpdate(artifact_type, id):
     except Exception as e:
         pass
         #TODO: return code on wrong request body
+        #TODO: update S3 files if url is changed
 
     return jsonify({'description': 'Artifact does not exist.'}), 404
 
@@ -124,7 +125,8 @@ def ArtifactCreate(artifact_type):
         url = data.get("url")
         newModel = Model(url)
         logger.info(f"Created new model artifact with name: {newModel.name}")
-        model_registry[newModel.id] = newModel  # change to work with S3
+        model_registry[newModel.id] = newModel
+        # TODO: need to download the files from the link and store them in S3
         return jsonify(newModel.metadata), 201
     except Exception as e:
         return jsonify({'description': 
