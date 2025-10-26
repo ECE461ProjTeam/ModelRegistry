@@ -1,6 +1,7 @@
 from ..metrics.data_fetcher.huggingface import get_huggingface_model_data
 from ..cli.schema import default_ndjson
 import re
+import sys
 
 class Artifact():
     def __init__(self, url):
@@ -15,7 +16,7 @@ class Model(Artifact):
             self.name = hf_match.group(2)
         else:
             raise ValueError("Invalid model URL")
-        self.id = hash(self.url)
+        self.id = str(hash(self.url) + sys.maxsize + 1)
         self.metadata = {'name': self.name, 'id': self.id, 'type': self.type}   
         
 class Dataset(Artifact):

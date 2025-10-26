@@ -64,10 +64,18 @@ def ArtifactRetrieve(artifact_type, id):
     
     if artifact_type not in ["model", "dataset", "code"] or not id.isdigit():
         return jsonify({'description': 'There is missing field(s) in the artifact_type or artifact_id or it is formed improperly, or is invalid.'}), 400
-    
-    for model in model_registry.values():
+
+    print(model_registry)
+
+    if id not in model_registry:
+        return jsonify({'description': 'Artifact does not exist.'}), 404
+    try:
+        model = model_registry[id]
+        print(model.id)
         if model.type == artifact_type and str(model.id) == id:
             return jsonify(model.metadata), 200
+    except Exception as e:
+        pass
 
     return jsonify({'description': 'Artifact does not exist.'}), 404
 
@@ -75,7 +83,28 @@ def ArtifactRetrieve(artifact_type, id):
 @app.route('/artifacts/<artifact_type>/<id>', methods=['PUT'])
 def ArtifactUpdate(artifact_type, id):
     """The name, version, and id must match. The artifact source (from artifact_data) will replace the previous contents."""
-    return jsonify({'message': 'Not implemented'}), 501
+    
+    if not authenticate():
+        return jsonify({'description': 'Authentication failed due to invalid or missing AuthenticationToken.'}), 403
+    
+    if artifact_type not in ["model", "dataset", "code"] or not id.isdigit():
+        return jsonify({'description': 'There is missing field(s) in the artifact_type or artifact_id or it is formed improperly, or is invalid.'}), 400
+    
+    try:
+        req_data = request.get_json()
+        metadata = req_data.get("metadata")
+        upd_data = req_data.get("data")
+        
+        model = model_registry[id]
+        if model.type == artifact_type and model.id == id:
+            model_registry[id].metadata.update(metadata)
+            model_registry[id].url = upd_data.get("url")
+            return jsonify({'description': 'Artifact is updated.'}), 200
+    except Exception as e:
+        pass
+        #TODO: return code on wrong request body
+
+    return jsonify({'description': 'Artifact does not exist.'}), 404
 
 
 @app.route('/artifacts/<artifact_type>/<id>', methods=['DELETE'])
