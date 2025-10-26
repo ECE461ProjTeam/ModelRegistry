@@ -34,11 +34,7 @@ def ArtifactsList():
     
     for model in model_registry.values():
         if model.type in types:
-            res[model.name] = {
-                'type': model.type,
-                'url': model.url,
-                'id': model.id
-            }
+            res[model.name] = model.metadata
     #TODO: pagination?
     #TODO: too many artifacts?
     return jsonify(res), 200
@@ -62,7 +58,18 @@ def RegistryReset():
 @app.route('/artifacts/<artifact_type>/<id>', methods=['GET'])
 def ArtifactRetrieve(artifact_type, id):
     """Return this artifact."""
-    return jsonify({'message': 'Not implemented'}), 501
+    
+    if not authenticate():
+        return jsonify({'description': 'Authentication failed due to invalid or missing AuthenticationToken.'}), 403
+    
+    if artifact_type not in ["model", "dataset", "code"] or not id.isdigit():
+        return jsonify({'description': 'There is missing field(s) in the artifact_type or artifact_id or it is formed improperly, or is invalid.'}), 400
+    
+    for model in model_registry.values():
+        if model.type == artifact_type and str(model.id) == id:
+            return jsonify(model.metadata), 200
+
+    return jsonify({'description': 'Artifact does not exist.'}), 404
 
 
 @app.route('/artifacts/<artifact_type>/<id>', methods=['PUT'])
@@ -89,7 +96,7 @@ def ArtifactCreate(artifact_type):
         newModel = Model(url)
         logger.info(f"Created new model artifact with name: {newModel.name}")
         model_registry[newModel.id] = newModel  # change to work with S3
-        return jsonify({'name': newModel.name, 'id': newModel.id, 'type': newModel.type}), 201
+        return jsonify(newModel.metadata), 201
     except Exception as e:
         return jsonify({'description': 
             'There is missing field(s) in the artifact_data or it is formed improperly (must include a single url)'}), 400
