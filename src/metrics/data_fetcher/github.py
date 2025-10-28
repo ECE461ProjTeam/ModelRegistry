@@ -142,13 +142,22 @@ def get_pr_review_stats(owner: str, repo: str, headers: Dict[str, str]) -> Dict[
 
 def _fetch_prs_with_graphql(owner: str, repo: str, headers: Dict[str, str]) -> Dict[str, Any]:
     """
-    Fetch all merged PRs with review data using GitHub GraphQL API.
+    Fetch recent merged PRs with review data using GitHub GraphQL API.
     
-    This dramatically reduces API calls:    
+    Analyzes up to the last 500 merged PRs to evaluate current code review practices.
+    This focuses on recent development (typically ~1 year for active repos) rather than
+    entire project history, providing a more relevant metric for ongoing maintenance.
     
-    For a repo with 1000 merged PRs:
-    - REST: 1001 calls
-    - GraphQL: 11 calls
+    GraphQL efficiency:
+    - 500 PRs with REST: 501 calls (1 list + 500 individual review checks)
+    - 500 PRs with GraphQL: 5 calls (100 PRs per query with pagination)
+    
+    Returns:
+        Dict with statistics about reviewed PRs in recent development:
+        - total_prs: Number of merged PRs analyzed (up to 500)
+        - reviewed_prs: Number of PRs with at least one review
+        - total_lines_added: Total lines added in analyzed PRs
+        - lines_from_reviewed_prs: Lines added via reviewed PRs
     """
     stats = {
         "total_prs": 0,
@@ -186,7 +195,7 @@ def _fetch_prs_with_graphql(owner: str, repo: str, headers: Dict[str, str]) -> D
     cursor = None
     has_next_page = True
     prs_processed = 0
-    max_prs = 1000  # Safety limit to prevent infinite loops
+    max_prs = 200  # Analyze last 500 PRs (recent development, typically ~1 year)
     
     while has_next_page and prs_processed < max_prs:
         variables = {

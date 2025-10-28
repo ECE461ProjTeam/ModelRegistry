@@ -4,9 +4,18 @@ from ..types import MetricResult
 
 
 class ReviewednessMetric:
-    """The fraction of all code in the associated GitHub repository that 
-    was introduced through pull requests with a code review. If there is no 
-    linked GitHub repository, return -1. 
+    """
+    Measures the fraction of recent code that was introduced through reviewed PRs.
+    
+    Analyzes the last 500 merged PRs to evaluate current code review practices.
+    This focuses on recent development quality (typically ~1 year for active repos)
+    rather than entire project history, providing a more relevant metric for 
+    assessing ongoing maintenance and current team practices.
+    
+    Returns:
+        - value: Fraction of lines in recent PRs that came from reviewed PRs (0.0 to 1.0)
+        - binary: 1 if ≥50% of recent code was reviewed, 0 otherwise
+        - -1.0 if no GitHub repository or no PR data available
     """
 
     id = "reviewedness"
@@ -38,7 +47,7 @@ class ReviewednessMetric:
         reviewed_prs = pr_stats.get("reviewed_prs", 0)
         
         # Calculate reviewedness fraction
-        # Fraction of "added" lines from reviewed PRs / total "added" lines
+        # Fraction of lines in recent PRs (up to last 500) that came from reviewed PRs
         if total_lines_added > 0:
             reviewed_fraction = lines_from_reviewed_prs / total_lines_added
         else:
@@ -47,11 +56,12 @@ class ReviewednessMetric:
         
         # Prepare detailed results
         details = {
-            "total_prs": total_prs,
+            "total_prs_analyzed": total_prs,  # Number of recent PRs analyzed (up to 500)
             "reviewed_prs": reviewed_prs,
-            "total_lines_added": total_lines_added,
+            "total_lines_added": total_lines_added,  # Total lines added in analyzed PRs
             "lines_from_reviewed_prs": lines_from_reviewed_prs,
-            "review_rate": f"{reviewed_prs}/{total_prs}" if total_prs > 0 else "N/A"
+            "review_rate": f"{reviewed_prs}/{total_prs}" if total_prs > 0 else "N/A",
+            "note": "Based on last 500 merged PRs (recent development)"
         }
 
         return MetricResult(
