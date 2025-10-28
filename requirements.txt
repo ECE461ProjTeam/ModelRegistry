@@ -1,7 +1,7 @@
-requests
-huggingface_hub
-datasets
-pytest
-pytest-cov
+requests==2.32.3
+huggingface_hub==0.24.6
+datasets==3.0.2
+pytest==8.3.3
+pytest-cov==7.0.0
 webdriver-manager==4.0.2
 selenium==4.38.0
