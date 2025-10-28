@@ -3,3 +3,5 @@ huggingface_hub
 datasets
 pytest
 pytest-cov
+webdriver-manager==4.0.2
+selenium==4.38.0
