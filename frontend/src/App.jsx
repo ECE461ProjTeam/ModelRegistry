@@ -34,10 +34,10 @@
 
 // export default App
 import React from "react";
-import UploadZip from "./components/UploadModel.jsx";
+import UserInput from "./components/UserInput.jsx";
 
 function App() {
-  return <UploadZip />;
+  return <UserInput />;
 }
 
 export default App;
