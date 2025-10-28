@@ -1,7 +1,7 @@
 from __future__ import annotations
 from typing import Dict, Any
 from ..types import MetricResult
-from ..data_fetcher import get_genai_metric_data
+
 
 class ReviewednessMetric:
     """The fraction of all code in the associated GitHub repository that 
@@ -28,25 +28,38 @@ class ReviewednessMetric:
                 seconds=time.time() - start
             )
         
-        # TODO: Calculate fraction of code from reviewed PRs
-        # You'll need to fetch PR data and compare with total commits
-        reviewed_fraction = 0.0  # Your calculation here
+        # Get PR review statistics
+        pr_stats = github_data.get("pr_review_stats", {})
         
-        # total code lines: 
-        # fraction of "added": lines from reviewed PRs / total "added" lines
-
-
-
-
-
-
-
-
+        # Extract the data we need
+        total_lines_added = pr_stats.get("total_lines_added", 0)
+        lines_from_reviewed_prs = pr_stats.get("lines_from_reviewed_prs", 0)
+        total_prs = pr_stats.get("total_prs", 0)
+        reviewed_prs = pr_stats.get("reviewed_prs", 0)
+        
+        # Calculate reviewedness fraction
+        # Fraction of "added" lines from reviewed PRs / total "added" lines
+        if total_lines_added > 0:
+            reviewed_fraction = lines_from_reviewed_prs / total_lines_added
+        else:
+            # No PR data available
+            reviewed_fraction = -1.0
+        
+        # Prepare detailed results
+        details = {
+            "total_prs": total_prs,
+            "reviewed_prs": reviewed_prs,
+            "total_lines_added": total_lines_added,
+            "lines_from_reviewed_prs": lines_from_reviewed_prs,
+            "review_rate": f"{reviewed_prs}/{total_prs}" if total_prs > 0 else "N/A"
+        }
 
         return MetricResult(
             id=self.id,
             value=reviewed_fraction,
-            binary=1 if reviewed_fraction > 0.5 else 0,
-            details={"reviewed_prs": 0, "total_commits": 0},
+            binary=1 if reviewed_fraction >= 0.5 else 0,
+            details=details,
             seconds=time.time() - start
         )
+
+

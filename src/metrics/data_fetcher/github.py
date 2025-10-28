@@ -186,7 +186,7 @@ def _fetch_prs_with_graphql(owner: str, repo: str, headers: Dict[str, str]) -> D
     cursor = None
     has_next_page = True
     prs_processed = 0
-    max_prs = 6000  # Safety limit to prevent infinite loops
+    max_prs = 1000  # Safety limit to prevent infinite loops
     
     while has_next_page and prs_processed < max_prs:
         variables = {

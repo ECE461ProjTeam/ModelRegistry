@@ -21,8 +21,9 @@ def build_registry_from_plan() -> MetricRegistry:
     from .impl.dataset_quality import DatasetQualityMetric
     from .impl.code_quality import CodeQualityMetric
     from .impl.performance_claims import PerformanceClaimsMetric
-
     from .impl.reviewedness import ReviewednessMetric
+    from .impl.reproducibility import ReproducibilityMetric
+    from .impl.treescore import TreescoreMetric
 
     reg = MetricRegistry()
     reg.register(SizeMetric())
@@ -34,6 +35,8 @@ def build_registry_from_plan() -> MetricRegistry:
     reg.register(CodeQualityMetric())
     reg.register(PerformanceClaimsMetric())
     reg.register(ReviewednessMetric())
+    reg.register(ReproducibilityMetric())
+    reg.register(TreescoreMetric())
     return reg
 
 
