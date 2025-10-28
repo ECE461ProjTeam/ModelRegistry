@@ -62,6 +62,7 @@ export default function UserInput() {
       <h1 style={{ fontSize: "2em", marginBottom: "1rem" }}>Submit Model URL</h1>
 
       <input
+        id="url-input"
         type="text"
         aria-label="Model URL"
         placeholder="Enter model URL"
@@ -79,6 +80,7 @@ export default function UserInput() {
       />
 
       <button
+        id="submit-btn"
         onClick={handleSubmit}
         disabled={loading}
         aria-label="Submit URL"
@@ -101,7 +103,7 @@ export default function UserInput() {
         {loading ? "Submitting..." : "Submit"}
       </button>
 
-      {status && <p style={{ marginTop: "1rem" }}>{status}</p>}
+      {status && <p id="status-text" style={{ marginTop: "1rem" }}>{status}</p>}
     </div>
   );
 }
