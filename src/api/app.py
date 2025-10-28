@@ -65,14 +65,11 @@ def ArtifactRetrieve(artifact_type, id):
     if artifact_type not in ["model", "dataset", "code"] or not id.isdigit():
         return jsonify({'description': 'There is missing field(s) in the artifact_type or artifact_id or it is formed improperly, or is invalid.'}), 400
 
-    print(model_registry)
-
     if id not in model_registry:
         return jsonify({'description': 'Artifact does not exist.'}), 404
     try:
         model = model_registry[id]
-        print(model.id)
-        if model.type == artifact_type and str(model.id) == id:
+        if model.type == artifact_type:
             return jsonify(model.metadata), 200
     except Exception as e:
         pass

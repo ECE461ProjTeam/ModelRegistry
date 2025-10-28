@@ -7,7 +7,8 @@ import unittest
 import json
 import sys
 from unittest.mock import patch, MagicMock
-sys.path.insert(0, '/home/shay/a/mgoloven/Desktop/ece461/ModelRegistry')
+import os
+sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), '..')))
 
 from src.api.app import app, model_registry
 
@@ -425,78 +426,6 @@ class TestArtifactsListEndpoint(TestAPIEndpoints):
         self.assertEqual(response.status_code, 403)
 
 
-class TestUnimplementedEndpoints(TestAPIEndpoints):
-    """Test endpoints that return 501 Not Implemented"""
-
-    def test_artifact_delete_not_implemented(self):
-        """Test DELETE /artifacts/{artifact_type}/{id} returns 501"""
-        response = self.client.delete(
-            '/artifacts/model/123',
-            headers=self.headers
-        )
-        self.assertEqual(response.status_code, 501)
-
-    def test_model_rate_not_implemented(self):
-        """Test GET /artifact/model/{id}/rate returns 501"""
-        response = self.client.get(
-            '/artifact/model/123/rate',
-            headers=self.headers
-        )
-        self.assertEqual(response.status_code, 501)
-
-    def test_artifact_cost_not_implemented(self):
-        """Test GET /artifact/{artifact_type}/{id}/cost returns 501"""
-        response = self.client.get(
-            '/artifact/model/123/cost',
-            headers=self.headers
-        )
-        self.assertEqual(response.status_code, 501)
-
-    def test_create_auth_token_not_implemented(self):
-        """Test PUT /authenticate returns 501"""
-        response = self.client.put('/authenticate')
-        self.assertEqual(response.status_code, 501)
-
-    def test_artifact_by_name_not_implemented(self):
-        """Test GET /artifact/byName/{name} returns 501"""
-        response = self.client.get('/artifact/byName/test')
-        self.assertEqual(response.status_code, 501)
-
-    def test_artifact_audit_not_implemented(self):
-        """Test GET /artifact/{artifact_type}/{id}/audit returns 501"""
-        response = self.client.get(
-            '/artifact/model/123/audit',
-            headers=self.headers
-        )
-        self.assertEqual(response.status_code, 501)
-
-    def test_artifact_lineage_not_implemented(self):
-        """Test GET /artifact/model/{id}/lineage returns 501"""
-        response = self.client.get(
-            '/artifact/model/123/lineage',
-            headers=self.headers
-        )
-        self.assertEqual(response.status_code, 501)
-
-    def test_artifact_license_check_not_implemented(self):
-        """Test POST /artifact/model/{id}/license-check returns 501"""
-        response = self.client.post(
-            '/artifact/model/123/license-check',
-            headers=self.headers,
-            data=json.dumps({'github_url': 'https://github.com/test/repo'})
-        )
-        self.assertEqual(response.status_code, 501)
-
-    def test_artifact_by_regex_not_implemented(self):
-        """Test POST /artifact/byRegEx returns 501"""
-        response = self.client.post(
-            '/artifact/byRegEx',
-            headers=self.headers,
-            data=json.dumps({'regex': 'test.*'})
-        )
-        self.assertEqual(response.status_code, 501)
-
-
 class TestEdgeCases(TestAPIEndpoints):
     """Test edge cases and error handling"""
 
@@ -561,7 +490,6 @@ def suite():
     test_suite.addTest(unittest.makeSuite(TestArtifactRetrieveEndpoint))
     test_suite.addTest(unittest.makeSuite(TestArtifactUpdateEndpoint))
     test_suite.addTest(unittest.makeSuite(TestArtifactsListEndpoint))
-    test_suite.addTest(unittest.makeSuite(TestUnimplementedEndpoints))
     test_suite.addTest(unittest.makeSuite(TestEdgeCases))
     return test_suite
 

@@ -2,6 +2,7 @@ from ..metrics.data_fetcher.huggingface import get_huggingface_model_data
 from ..cli.schema import default_ndjson
 import re
 import sys
+import uuid
 
 class Artifact():
     def __init__(self, url):
@@ -16,7 +17,7 @@ class Model(Artifact):
             self.name = hf_match.group(2)
         else:
             raise ValueError("Invalid model URL")
-        self.id = str(hash(self.url) + sys.maxsize + 1)
+        self.id = int(uuid.uuid4().int % 1e9)
         self.metadata = {'name': self.name, 'id': self.id, 'type': self.type}
         
 class Dataset(Artifact):
@@ -25,7 +26,7 @@ class Dataset(Artifact):
         self.type = "dataset"
         ndjson = default_ndjson(self.url, category=self.type)
         self.name = ndjson['name']
-        self.id = str(hash(self.url) + sys.maxsize + 1)
+        self.id = int(uuid.uuid4().int % 1e9)
         self.metadata = {'name': self.name, 'id': self.id, 'type': self.type}
 
 
@@ -35,6 +36,6 @@ class Code(Artifact):
         self.type = "code"
         ndjson = default_ndjson(self.url, category=self.type)
         self.name = ndjson['name']
-        self.id = str(hash(self.url) + sys.maxsize + 1)
+        self.id = int(uuid.uuid4().int % 1e9)
         self.metadata = {'name': self.name, 'id': self.id, 'type': self.type}
 
