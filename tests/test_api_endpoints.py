@@ -350,7 +350,7 @@ class TestArtifactsListEndpoint(TestAPIEndpoints):
         
         self.assertEqual(response.status_code, 200)
         data = json.loads(response.data)
-        self.assertIsInstance(data, dict)
+        self.assertIsInstance(data, list)
         self.assertEqual(len(data), 3)
 
     @patch('src.api.app.authenticate', return_value=True)

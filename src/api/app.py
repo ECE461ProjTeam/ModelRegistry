@@ -22,7 +22,7 @@ def ArtifactsList():
     if not authenticate():
         return jsonify({'description': 'Authentication failed due to invalid or missing AuthenticationToken.'}), 403
     
-    res = {}
+    res = []
     try:
         data = request.get_json()
         name = data.get("name")
@@ -34,7 +34,7 @@ def ArtifactsList():
     
     for model in model_registry.values():
         if model.type in types:
-            res[model.name] = model.metadata
+            res.append(model.metadata)
     #TODO: pagination?
     #TODO: too many artifacts?
     return jsonify(res), 200
