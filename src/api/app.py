@@ -120,15 +120,21 @@ def ArtifactCreate(artifact_type):
         logger.info(f"Creating new artifact of type {artifact_type}")
         data = request.get_json()
         url = data.get("url")
-        newModel = Model(url)
-        logger.info(f"Created new model artifact with name: {newModel.name}")
-        model_registry[newModel.id] = newModel
+        if artifact_type == "model":
+            newArtifact = Model(url)
+        elif artifact_type == "dataset":
+            newArtifact = Dataset(url)
+        elif artifact_type == "code":
+            newArtifact = Code(url)
+        else:
+            return jsonify({'description': 'Invalid artifact_type.'}), 400
+        logger.info(f"Created new {artifact_type} artifact with name: {newArtifact.name}")
+        model_registry[newArtifact.id] = newArtifact
         # TODO: need to download the files from the link and store them in S3
-        return jsonify(newModel.metadata), 201
+        return jsonify(newArtifact.metadata), 201
     except Exception as e:
         return jsonify({'description': 
             'There is missing field(s) in the artifact_data or it is formed improperly (must include a single url)'}), 400
-        
 
 
 @app.route('/artifact/model/<id>/rate', methods=['GET'])
