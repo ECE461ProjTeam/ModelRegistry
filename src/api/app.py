@@ -2,6 +2,8 @@ from flask import Flask, jsonify, request
 from .classes import *
 from src.logger import get_logger
 from .auth import authenticate, getPermissionLevel
+from ..url_parsers.url_type_handler import handle_url
+from ..cli.validate import validate_ndjson
 logger = get_logger("api.app")
 
 plannedTracks = ["Access control track"]
@@ -141,8 +143,27 @@ def ArtifactCreate(artifact_type):
 def ModelArtifactRate(id):
     """Get ratings for this model artifact. (BASELINE)."""
     
+    if not authenticate():
+        return jsonify({'description': 'Authentication failed due to invalid or missing AuthenticationToken.'}), 403
     
-    return jsonify({'message': 'Not implemented'}), 501
+    try:
+        to_evaluate = model_registry.get(id)
+    except Exception as e:
+        return jsonify({'description': 'There is missing field(s) in the artifact_id or it is formed improperly, or is invalid.'}), 400
+    if to_evaluate is None:
+        return jsonify({'description': 'Artifact does not exist.'}), 404
+    
+    
+    if to_evaluate.ndjson == {}:
+        try:
+            raw_ndjson = handle_url({0: ['', '', to_evaluate.url]})[0]
+        except Exception as e:
+            return jsonify({'description': 'The artifact rating system encountered an error while computing at least one metric.'}), 500
+        if(validate_ndjson(raw_ndjson)):
+            to_evaluate.ndjson = raw_ndjson
+            to_evaluate.ndjson.update({'name': to_evaluate.name, 'category': to_evaluate.type})
+
+    return jsonify(to_evaluate.ndjson), 200
 
 
 @app.route('/artifact/<artifact_type>/<id>/cost', methods=['GET'])

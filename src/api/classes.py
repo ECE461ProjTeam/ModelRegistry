@@ -19,6 +19,7 @@ class Model(Artifact):
             raise ValueError("Invalid model URL")
         self.id = str(int(uuid.uuid4().int % 1e9))
         self.metadata = {'name': self.name, 'id': self.id, 'type': self.type}
+        self.ndjson = {}
         
 class Dataset(Artifact):
     def __init__(self, url):
