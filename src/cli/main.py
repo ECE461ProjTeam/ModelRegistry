@@ -5,7 +5,10 @@ import sys
 from typing import Any, Dict
 from src.url_parsers import handle_url, get_url_category
 from src.cli.schema import default_ndjson
+from src.logger import get_logger
 import logging
+
+logger = get_logger("cli.main")
 
 
 def _check_env_variables() -> None:
@@ -77,7 +80,10 @@ def validate_ndjson(record: Dict[str, Any]) -> bool:
         "size_score",
         "dataset_and_code_score",
         "dataset_quality",
-        "code_quality"}
+        "code_quality",
+        "reviewedness",
+        "reproducibility",
+        "treescore"}
     latency_fields = {
         "net_score_latency",
         "ramp_up_time_latency",
@@ -87,7 +93,10 @@ def validate_ndjson(record: Dict[str, Any]) -> bool:
         "size_score_latency",
         "dataset_and_code_score_latency",
         "dataset_quality_latency",
-        "code_quality_latency"}
+        "code_quality_latency",
+        "reviewedness_latency",
+        "reproducibility_latency",
+        "treescore_latency"}
 
     if not isinstance(record, dict):
         return False
@@ -108,6 +117,9 @@ def validate_ndjson(record: Dict[str, Any]) -> bool:
         # if socre_metric is a dict, check inner values
         if isinstance(score_metric, dict):
             for k, v in score_metric.items():
+                # allow -1 for unavailable
+                if v == -1.0 or v == -1:
+                    continue
                 if v is not None and (
                     not isinstance(
                         v, (float)) or not (
@@ -116,6 +128,8 @@ def validate_ndjson(record: Dict[str, Any]) -> bool:
         else:
             # score can be none or float between 0 and 1
             if score_metric is not None:
+                if score_metric == -1.0 or score_metric == -1:
+                    continue
                 if not isinstance(
                         score_metric, (float)) or not (
                         0.00 <= score_metric <= 1.00):
@@ -241,15 +255,18 @@ def main() -> int:
             ndjsons = evaluate_url(models)
 
             for ndjson in ndjsons.values():
+                logger.debug(f"Validating NDJSON for model {ndjson.get('name', 'unknown')}")
                 if validate_ndjson(ndjson):
                     print(json.dumps(ndjson, separators=(",", ":")))
                 else:
                     name = ndjson.get("name", "unknown")
+                    logger.error(f"Invalid NDJSON for model {name}: {ndjson}")
                     print(json.dumps(
                         {"name": name, "error": "Invalid record"}))
 
             return 0
 
     except Exception as e:
+        logger.error(f"Exception occurred: {e}")
         print(f"ERROR: {e}", file=sys.stderr)
         return 1

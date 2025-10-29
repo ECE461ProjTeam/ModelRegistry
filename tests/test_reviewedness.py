@@ -158,6 +158,9 @@ class TestReviewednessUnit:
         assert result.details["reviewed_prs"] == 0
         assert result.details["review_rate"] == "0/50"
     
+
+    #next two tests would imply that github repo was there, but there were 0 PRs
+    # thus a score of 0 (no code link provided) is inappropriate
     def test_no_pr_data(self, metric):
         """Test when total_prs is 0."""
         context = {
@@ -172,7 +175,7 @@ class TestReviewednessUnit:
         }
         result = metric.compute(context)
         
-        assert result.value == -1.0
+        assert result.value == 0.0
         assert result.binary == 0
         assert result.seconds >= 0
     
@@ -185,7 +188,7 @@ class TestReviewednessUnit:
             }
         }
         result = metric.compute(context)
-        assert result.value == -1.0
+        assert result.value == 0.0
         assert result.binary == 0
         assert result.seconds >= 0
     

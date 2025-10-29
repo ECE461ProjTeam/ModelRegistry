@@ -1,13 +1,16 @@
 from __future__ import annotations
 from typing import Dict, Any
 from ..types import MetricResult
+from src.logger import get_logger
+
+logger = get_logger("metrics.reviewedness")
 
 
 class ReviewednessMetric:
     """
     Measures the fraction of recent code that was introduced through reviewed PRs.
     
-    Analyzes the last 500 merged PRs to evaluate current code review practices.
+    Analyzes the last 200 merged PRs to evaluate current code review practices.
     This focuses on recent development quality (typically ~1 year for active repos)
     rather than entire project history, providing a more relevant metric for 
     assessing ongoing maintenance and current team practices.
@@ -24,16 +27,22 @@ class ReviewednessMetric:
         import time
         start = time.time()
         
+        # logger.info(f"Context keys: {context.keys()}")
+
+        code_url = context.get("code_url")
+        # logger.debug(f"Code URL: {code_url}")
+
         # Get GitHub data from context
         github_data = context.get("github", {})
+        # logger.debug(f"GitHub data present: {bool(github_data)}")
         
-        # If no GitHub repo, return -1
+        # If no GitHub repo or no code URL, return -1
         if not github_data:
             return MetricResult(
                 id=self.id,
                 value=-1.0,
                 binary=0,
-                details={"reason": "No GitHub repository"},
+                details={"reason": "No GitHub repository or no code URL"},
                 seconds=time.time() - start
             )
         
@@ -47,21 +56,21 @@ class ReviewednessMetric:
         reviewed_prs = pr_stats.get("reviewed_prs", 0)
         
         # Calculate reviewedness fraction
-        # Fraction of lines in recent PRs (up to last 500) that came from reviewed PRs
+        # Fraction of lines in recent PRs (up to last 200) that came from reviewed PRs
         if total_lines_added > 0:
             reviewed_fraction = lines_from_reviewed_prs / total_lines_added
         else:
             # No PR data available
-            reviewed_fraction = -1.0
+            reviewed_fraction = 0.0
         
         # Prepare detailed results
         details = {
-            "total_prs_analyzed": total_prs,  # Number of recent PRs analyzed (up to 500)
+            "total_prs_analyzed": total_prs,  # Number of recent PRs analyzed (up to 200)
             "reviewed_prs": reviewed_prs,
             "total_lines_added": total_lines_added,  # Total lines added in analyzed PRs
             "lines_from_reviewed_prs": lines_from_reviewed_prs,
             "review_rate": f"{reviewed_prs}/{total_prs}" if total_prs > 0 else "N/A",
-            "note": "Based on last 500 merged PRs (recent development)"
+            "note": "Based on last 200 merged PRs (recent development)"
         }
 
         return MetricResult(

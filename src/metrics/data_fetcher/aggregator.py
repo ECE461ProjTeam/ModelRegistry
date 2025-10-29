@@ -113,6 +113,9 @@ def fetch_comprehensive_metrics_data(
             github_data = df.get_github_repo_data(code_url)
             data["github_latency"] = time.time() - gh_start
             if github_data:
+                # Store the full GitHub data for metrics to use
+                data["github"] = github_data
+                
                 # Extract license from GitHub data (only if HF license not set)
                 if not data["license"] and github_data.get("license"):
                     data["license"] = github_data.get("license")
