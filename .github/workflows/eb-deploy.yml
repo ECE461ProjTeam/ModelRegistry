@@ -7,6 +7,11 @@ name: Deploy to Elastic Beanstalk (Python)
 on:
   push:
     branches: [ "main" ]
+  # Run checks for pull requests targeting main so branch pushes get validated
+  # before they are merged. Only a push to `main` (for example, after a merge)
+  # will perform the deployment step below.
+#   pull_request:
+#     branches: [ "main" ]
 
 # Important: these values are pulled from repository secrets for safety.
 # Required repository secrets (set in GitHub Settings > Secrets):
@@ -57,7 +62,6 @@ jobs:
 
       - name: Upload bundle to S3 and create EB application version
         # Upload the zip to the Elastic Beanstalk S3 bucket and register a new application version.
-        # Use our dedicated bucket instead of the auto-created elasticbeanstalk-* bucket.
         env:
           S3_BUCKET: ${{ secrets.S3_BUCKET }}
         run: |
