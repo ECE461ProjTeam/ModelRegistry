@@ -1,0 +1,77 @@
+name: Deploy to Elastic Beanstalk (Python)
+
+# This workflow builds a deployable bundle from the repository root, uploads it to S3,
+# creates an Elastic Beanstalk application version and updates the environment.
+# Triggers: push to `main` and pull requests targeting `main`.
+
+on:
+  push:
+    branches: [ "main" ]
+  # Run checks for pull requests targeting main so branch pushes get validated
+  # before they are merged. Only a push to `main` (for example, after a merge)
+  # will perform the deployment step below.
+#   pull_request:
+#     branches: [ "main" ]
+
+# Important: these values are pulled from repository secrets for safety.
+# Required repository secrets (set in GitHub Settings > Secrets):
+# - AWS_ACCESS_KEY_ID
+# - AWS_SECRET_ACCESS_KEY
+# - ELASTIC_BEANSTALK_NAME
+# - ELASTIC_BEANSTALK_ENV_NAME
+# - AWS_REGION
+env:
+  ELASTIC_BEANSTALK_NAME: ${{ secrets.ELASTIC_BEANSTALK_NAME }}
+  ELASTIC_BEANSTALK_ENV_NAME: ${{ secrets.ELASTIC_BEANSTALK_ENV_NAME }}
+  AWS_REGION: ${{ secrets.AWS_REGION }}
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v4
+        with:
+          python-version: '3.11'
+
+      - name: Install dependencies
+        run: |
+          python -m pip install --upgrade pip
+          if [ -f requirements.txt ]; then pip install -r requirements.txt; fi
+
+      - name: Create deploy bundle
+        # Build a zip file of the repository root suitable for Elastic Beanstalk.
+        # We exclude .git, our workflow files, frontend (if present), node_modules, and common artifacts.
+        run: |
+          ZIP_NAME="${{ github.run_id }}-${{ github.run_attempt }}.zip"   # unique per workflow run and attempt
+          # -r recurse, -x exclude patterns
+          zip -r "$ZIP_NAME" . -x "tests/*" "tools/*" "venv/*" ".git/*" ".github/*" "frontend/*" "node_modules/*" "__pycache__/*" "*.pyc" "*.pyo" "*.log"
+          mkdir -p deploy-files
+          mv "$ZIP_NAME" deploy-files/
+
+      - name: Configure AWS Credentials
+        # This action sets AWS credentials in the runner so `aws` CLI calls work.
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          aws-region: ${{ env.AWS_REGION }}
+          aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
+          aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+
+      - name: Upload bundle to S3 and create EB application version
+        # Upload the zip to the Elastic Beanstalk S3 bucket and register a new application version.
+        env:
+          S3_BUCKET: ${{ secrets.S3_BUCKET }}
+        run: |
+          set -eux
+          S3_KEY="artifact/python-app/${{ github.run_id }}-${{ github.run_attempt }}.zip"
+          aws s3 cp "deploy-files/${{ github.run_id }}-${{ github.run_attempt }}.zip" "s3://$S3_BUCKET/$S3_KEY"
+          aws elasticbeanstalk create-application-version --application-name "${{ env.ELASTIC_BEANSTALK_NAME }}" --version-label "${{ github.run_id }}-${{ github.run_attempt }}" --source-bundle S3Bucket="$S3_BUCKET",S3Key="$S3_KEY"
+
+      - name: Update Elastic Beanstalk environment
+        # Point the EB environment to the new application version and wait until update completes.
+        run: |
+          aws elasticbeanstalk update-environment --environment-name "${{ env.ELASTIC_BEANSTALK_ENV_NAME }}" --version-label "${{ github.run_id }}-${{ github.run_attempt }}"
+          aws elasticbeanstalk wait environment-updated --environment-name "${{ env.ELASTIC_BEANSTALK_ENV_NAME }}"
