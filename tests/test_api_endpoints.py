@@ -426,6 +426,122 @@ class TestArtifactsListEndpoint(TestAPIEndpoints):
         self.assertEqual(response.status_code, 403)
 
 
+class TestModelArtifactRate(TestAPIEndpoints):
+    """Test /artifact/model/{id}/rate endpoint and edge cases"""
+
+    @patch('src.api.app.authenticate', return_value=True)
+    @patch('src.api.app.validate_ndjson', return_value=True)
+    @patch('src.api.app.handle_url')
+    def test_model_rate_success(self, mock_handle, mock_validate, mock_auth):
+        """Test GET /artifact/model/{id}/rate successfully computes and returns ndjson"""
+        # prepare mocks
+        raw_ndjson = {'metric_a': 0.9}
+        mock_handle.return_value = [raw_ndjson]
+
+        # create model
+        test_url = "https://huggingface.co/openai/whisper-tiny"
+        create_response = self.client.post(
+            '/artifact/model',
+            headers=self.headers,
+            data=json.dumps({'url': test_url})
+        )
+        self.assertEqual(create_response.status_code, 201)
+        created_data = json.loads(create_response.data)
+        artifact_id = created_data['id']
+
+        # request rating
+        response = self.client.get(f'/artifact/model/{artifact_id}/rate', headers=self.headers)
+        self.assertEqual(response.status_code, 200)
+        data = json.loads(response.data)
+        # returned payload should include the computed metrics and name/category added by the endpoint
+        self.assertIn('metric_a', data)
+        self.assertEqual(data['metric_a'], 0.9)
+        self.assertEqual(data['name'], 'whisper-tiny')
+        self.assertEqual(data['category'], 'model')
+
+    @patch('src.api.app.authenticate', return_value=True)
+    @patch('src.api.app.handle_url', side_effect=Exception('hf error'))
+    def test_model_rate_handle_url_error(self, mock_handle, mock_auth):
+        """If the underlying rating code errors, endpoint should return 500"""
+        # create model
+        test_url = "https://huggingface.co/openai/whisper-tiny"
+        create_response = self.client.post(
+            '/artifact/model',
+            headers=self.headers,
+            data=json.dumps({'url': test_url})
+        )
+        self.assertEqual(create_response.status_code, 201)
+        created_data = json.loads(create_response.data)
+        artifact_id = created_data['id']
+
+        response = self.client.get(f'/artifact/model/{artifact_id}/rate', headers=self.headers)
+        self.assertEqual(response.status_code, 500)
+        data = json.loads(response.data)
+        self.assertIn('description', data)
+        self.assertIn('The artifact rating system encountered an error', data['description'])
+
+    @patch('src.api.app.authenticate', return_value=True)
+    @patch('src.api.app.validate_ndjson', return_value=False)
+    @patch('src.api.app.handle_url')
+    def test_model_rate_validation_fails_returns_empty(self, mock_handle, mock_validate, mock_auth):
+        """If validation fails, the endpoint should return the still-empty ndjson (200 with empty dict)"""
+        mock_handle.return_value = [{'bad': 'data'}]
+
+        test_url = "https://huggingface.co/openai/whisper-tiny"
+        create_response = self.client.post(
+            '/artifact/model',
+            headers=self.headers,
+            data=json.dumps({'url': test_url})
+        )
+        self.assertEqual(create_response.status_code, 201)
+        created_data = json.loads(create_response.data)
+        artifact_id = created_data['id']
+
+        response = self.client.get(f'/artifact/model/{artifact_id}/rate', headers=self.headers)
+        self.assertEqual(response.status_code, 200)
+        data = json.loads(response.data)
+        # since validation failed, the model.ndjson remains empty
+        self.assertEqual(data, {})
+
+    @patch('src.api.app.authenticate', return_value=True)
+    def test_model_rate_artifact_not_found(self, mock_auth):
+        """Requesting rating for non-existent artifact returns 404"""
+        response = self.client.get('/artifact/model/999999999/rate', headers=self.headers)
+        self.assertEqual(response.status_code, 404)
+        data = json.loads(response.data)
+        self.assertEqual(data['description'], 'Artifact does not exist.')
+
+    @patch('src.api.app.authenticate', return_value=True)
+    @patch('src.api.app.handle_url')
+    @patch('src.api.app.validate_ndjson')
+    def test_model_rate_already_computed_skips_processing(self, mock_validate, mock_handle, mock_auth):
+        """If ndjson already present on the artifact, the endpoint should return it and not call handle_url/validate"""
+        # create model
+        test_url = "https://huggingface.co/openai/whisper-tiny"
+        create_response = self.client.post(
+            '/artifact/model',
+            headers=self.headers,
+            data=json.dumps({'url': test_url})
+        )
+        self.assertEqual(create_response.status_code, 201)
+        created_data = json.loads(create_response.data)
+        artifact_id = created_data['id']
+
+        # pre-populate ndjson
+        model_registry[artifact_id].ndjson = {'pre': 'value'}
+
+        response = self.client.get(f'/artifact/model/{artifact_id}/rate', headers=self.headers)
+        self.assertEqual(response.status_code, 200)
+        data = json.loads(response.data)
+        self.assertEqual(data, {'pre': 'value'})
+        mock_handle.assert_not_called()
+        mock_validate.assert_not_called()
+
+    @patch('src.api.app.authenticate', return_value=False)
+    def test_model_rate_authentication_failed(self, mock_auth):
+        """Authentication failure returns 403"""
+        response = self.client.get('/artifact/model/123/rate', headers=self.headers)
+        self.assertEqual(response.status_code, 403)
 class TestEdgeCases(TestAPIEndpoints):
     """Test edge cases and error handling"""
 
