@@ -4,6 +4,10 @@ plannedTracks = ["Access control track"]
 
 app = Flask(__name__)
 
+@app.route('/', methods=['GET'])
+def index():
+    """Index route to verify that the API is running."""
+    return jsonify({'message': 'Model Registry API is running'}), 200
 
 @app.route('/artifacts', methods=['POST'])
 def ArtifactsList():
