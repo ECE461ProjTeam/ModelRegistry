@@ -46,7 +46,7 @@ jobs:
         # Build a zip file of the repository root suitable for Elastic Beanstalk.
         # We exclude .git, our workflow files, frontend (if present), node_modules, and common artifacts.
         run: |
-          ZIP_NAME="${{ github.run_id }}.zip"   # unique per workflow run
+          ZIP_NAME="${{ github.run_id }}-${{ github.run_attempt }}.zip"   # unique per workflow run and attempt
           # -r recurse, -x exclude patterns
           zip -r "$ZIP_NAME" . -x "tests/*" "tools/*" "venv/*" ".git/*" ".github/*" "frontend/*" "node_modules/*" "__pycache__/*" "*.pyc" "*.pyo" "*.log"
           mkdir -p deploy-files
@@ -66,12 +66,12 @@ jobs:
           S3_BUCKET: ${{ secrets.S3_BUCKET }}
         run: |
           set -eux
-          S3_KEY="artifact/python-app/${{ github.run_id }}.zip"
-          aws s3 cp "deploy-files/${{ github.run_id }}.zip" "s3://$S3_BUCKET/$S3_KEY"
-          aws elasticbeanstalk create-application-version --application-name "${{ env.ELASTIC_BEANSTALK_NAME }}" --version-label "${{ github.run_id }}" --source-bundle S3Bucket="$S3_BUCKET",S3Key="$S3_KEY"
+          S3_KEY="artifact/python-app/${{ github.run_id }}-${{ github.run_attempt }}.zip"
+          aws s3 cp "deploy-files/${{ github.run_id }}-${{ github.run_attempt }}.zip" "s3://$S3_BUCKET/$S3_KEY"
+          aws elasticbeanstalk create-application-version --application-name "${{ env.ELASTIC_BEANSTALK_NAME }}" --version-label "${{ github.run_id }}-${{ github.run_attempt }}" --source-bundle S3Bucket="$S3_BUCKET",S3Key="$S3_KEY"
 
       - name: Update Elastic Beanstalk environment
         # Point the EB environment to the new application version and wait until update completes.
         run: |
-          aws elasticbeanstalk update-environment --environment-name "${{ env.ELASTIC_BEANSTALK_ENV_NAME }}" --version-label "${{ github.run_id }}"
+          aws elasticbeanstalk update-environment --environment-name "${{ env.ELASTIC_BEANSTALK_ENV_NAME }}" --version-label "${{ github.run_id }}-${{ github.run_attempt }}"
           aws elasticbeanstalk wait environment-updated --environment-name "${{ env.ELASTIC_BEANSTALK_ENV_NAME }}"
