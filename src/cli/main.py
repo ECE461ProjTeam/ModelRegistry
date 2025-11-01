@@ -6,6 +6,7 @@ from typing import Any, Dict
 from src.url_parsers import handle_url, get_url_category
 from src.cli.schema import default_ndjson
 import logging
+from src.api.app import run_api
 
 
 def _check_env_variables() -> None:
@@ -225,6 +226,8 @@ def main() -> int:
                 f"{passed}/{total} test cases passed. {coverage}% line coverage achieved.")
 
             return result.returncode
+        elif command == "api":
+            run_api()
         else:
             # Each model has a dictionary of links in order {code, dataset,
             # model}

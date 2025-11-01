@@ -15,6 +15,10 @@ pip install -r requirements.txt
 
 Note: You can obtain the `GEN_AI_STUDIO_API_KEY` at https://genai.rcac.purdue.edu/ by logging in to your Purdue student account, click on your profile -> Settings -> Account -> API Keys and then create one.
 
+### Run API server
+
+```run api```
+
 ### Run frontend locally
 In order to run the frontend locally (for testing), run the following command in the `frontend` directory:
 ```

@@ -1,6 +1,11 @@
 from flask import Flask, jsonify, request
+from .classes import *
+from src.logger import get_logger
+from .auth import authenticate, getPermissionLevel
+logger = get_logger("api.app")
 
 plannedTracks = ["Access control track"]
+model_registry = {}
 
 app = Flask(__name__)
 
@@ -16,29 +21,94 @@ def ArtifactsList():
     If you want to enumerate all artifacts, provide an array with a single artifact_query whose name is "*".
     The response is paginated; the response header includes the offset to use in the next query.
 
-    In the Request Body below, "version" has all the possible inputs. The "version" cannot be a combination of the different possibilities.
     """
-    return jsonify({'message': 'Not implemented-artifacts'}), 501
+    
+    if not authenticate():
+        return jsonify({'description': 'Authentication failed due to invalid or missing AuthenticationToken.'}), 403
+    
+    res = []
+    try:
+        data = request.get_json()
+        name = data.get("name")
+        types = data.get("types")
+        if name is None or types is None:
+            raise ValueError("Missing fields")
+    except Exception as e:
+        return jsonify({'description': 'There is missing field(s) in the artifact_query or it is formed improperly, or is invalid.'}), 400
+    
+    for model in model_registry.values():
+        if model.type in types:
+            res.append(model.metadata)
+    #TODO: pagination?
+    #TODO: too many artifacts?
+    return jsonify(res), 200
 
 
 @app.route('/reset', methods=['DELETE'])
 def RegistryReset():
     """Reset the registry to a system default state."""
-    return jsonify({'message': 'Not implemented'}), 501
+    
+    if not authenticate():
+        return jsonify({'description': 'Authentication failed due to invalid or missing AuthenticationToken.'}), 403
+    
+    if getPermissionLevel() != "admin":
+        return jsonify({'description': 'You do not have permission to reset the registry.'}), 401
+    
+    logger.info("Resetting the model registry to default state.")
+    model_registry.clear()
+    return jsonify({'description': 'Registry is reset.'}), 200
 
 
 @app.route('/artifacts/<artifact_type>/<id>', methods=['GET'])
 def ArtifactRetrieve(artifact_type, id):
     """Return this artifact."""
-    return jsonify({'message': 'Not implemented'}), 501
+    
+    if not authenticate():
+        return jsonify({'description': 'Authentication failed due to invalid or missing AuthenticationToken.'}), 403
+    
+    if artifact_type not in ["model", "dataset", "code"] or not id.isdigit():
+        return jsonify({'description': 'There is missing field(s) in the artifact_type or artifact_id or it is formed improperly, or is invalid.'}), 400
+
+    if id not in model_registry:
+        return jsonify({'description': 'Artifact does not exist.'}), 404
+    try:
+        model = model_registry[id]
+        if model.type == artifact_type:
+            return jsonify(model.metadata), 200
+    except Exception as e:
+        pass
+
+    return jsonify({'description': 'Artifact does not exist.'}), 404
 
 
 @app.route('/artifacts/<artifact_type>/<id>', methods=['PUT'])
 def ArtifactUpdate(artifact_type, id):
     """The name, version, and id must match. The artifact source (from artifact_data) will replace the previous contents."""
-    return jsonify({'message': 'Not implemented'}), 501
+    
+    if not authenticate():
+        return jsonify({'description': 'Authentication failed due to invalid or missing AuthenticationToken.'}), 403
+    
+    if artifact_type not in ["model", "dataset", "code"] or not id.isdigit():
+        return jsonify({'description': 'There is missing field(s) in the artifact_type or artifact_id or it is formed improperly, or is invalid.'}), 400
+    
+    try:
+        req_data = request.get_json()
+        metadata = req_data.get("metadata")
+        upd_data = req_data.get("data")
+        
+        model = model_registry[id]
+        if model.type == artifact_type and model.id == id:
+            model_registry[id].metadata.update(metadata)
+            model_registry[id].url = upd_data.get("url")
+            return jsonify({'description': 'Artifact is updated.'}), 200
+    except Exception as e:
+        pass
+        #TODO: return code on wrong request body
+        #TODO: update S3 files if url is changed
 
+    return jsonify({'description': 'Artifact does not exist.'}), 404
 
+# NON-BASELINE
 @app.route('/artifacts/<artifact_type>/<id>', methods=['DELETE'])
 def ArtifactDelete(artifact_type, id):
     """Delete only the artifact that matches 'id'. (id is a unique identifier for an artifact)."""
@@ -50,12 +120,32 @@ def ArtifactCreate(artifact_type):
     """Register a new artifact by providing a downloadable source URL. Artifacts may share a name with existing entries if their version differs.
     Refer to the description above to see how an id is formed for an artifact.
     """
-    return jsonify({'message': 'Not implemented'}), 501
+    try:
+        logger.info(f"Creating new artifact of type {artifact_type}")
+        data = request.get_json()
+        url = data.get("url")
+        if artifact_type == "model":
+            newArtifact = Model(url)
+        elif artifact_type == "dataset":
+            newArtifact = Dataset(url)
+        elif artifact_type == "code":
+            newArtifact = Code(url)
+        else:
+            return jsonify({'description': 'Invalid artifact_type.'}), 400
+        logger.info(f"Created new {artifact_type} artifact with name: {newArtifact.name}")
+        model_registry[newArtifact.id] = newArtifact
+        # TODO: need to download the files from the link and store them in S3
+        return jsonify(newArtifact.metadata), 201
+    except Exception as e:
+        return jsonify({'description': 
+            'There is missing field(s) in the artifact_data or it is formed improperly (must include a single url)'}), 400
 
 
 @app.route('/artifact/model/<id>/rate', methods=['GET'])
 def ModelArtifactRate(id):
     """Get ratings for this model artifact. (BASELINE)."""
+    
+    
     return jsonify({'message': 'Not implemented'}), 501
 
 
@@ -110,6 +200,5 @@ def get_tracks():
         return jsonify({'error': str(e)}), 500
 
 
-if __name__ == '__main__':
-    # Can test with curl -X <METHOD> http://127.0.0.1:5000/<command>
+def run_api():
     app.run(host='0.0.0.0', port=5000, debug=True)
