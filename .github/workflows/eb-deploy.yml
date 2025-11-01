@@ -7,8 +7,6 @@ name: Deploy to Elastic Beanstalk (Python)
 on:
   push:
     branches: [ "main" ]
-  pull_request:
-    branches: [ "main" ]
 
 # Important: these values are pulled from repository secrets for safety.
 # Required repository secrets (set in GitHub Settings > Secrets):
