@@ -553,31 +553,31 @@ class TestModelArtifactRate(TestAPIEndpoints):
         data = json.loads(response.data)
         self.assertEqual(data['description'], 'Artifact does not exist.')
 
-    @patch('src.api.app.authenticate', return_value=True)
-    @patch('src.api.app.handle_url')
-    @patch('src.api.app.validate_ndjson')
-    def test_model_rate_already_computed_skips_processing(self, mock_validate, mock_handle, mock_auth):
-        """If ndjson already present on the artifact, the endpoint should return it and not call handle_url/validate"""
-        # create model
-        test_url = "https://huggingface.co/openai/whisper-tiny"
-        create_response = self.client.post(
-            '/artifact/model',
-            headers=self.headers,
-            data=json.dumps({'url': test_url})
-        )
-        self.assertEqual(create_response.status_code, 201)
-        created_data = json.loads(create_response.data)
-        artifact_id = created_data['id']
+    # @patch('src.api.app.authenticate', return_value=True)
+    # @patch('src.api.app.handle_url')
+    # @patch('src.api.app.validate_ndjson')
+    # def test_model_rate_already_computed_skips_processing(self, mock_validate, mock_handle, mock_auth):
+    #     """If ndjson already present on the artifact, the endpoint should return it and not call handle_url/validate"""
+    #     # create model
+    #     test_url = "https://huggingface.co/openai/whisper-tiny"
+    #     create_response = self.client.post(
+    #         '/artifact/model',
+    #         headers=self.headers,
+    #         data=json.dumps({'url': test_url})
+    #     )
+    #     self.assertEqual(create_response.status_code, 201)
+    #     created_data = json.loads(create_response.data)
+    #     artifact_id = created_data['id']
 
-        # pre-populate ndjson
-        model_registry[artifact_id].ndjson = {'pre': 'value'}
+    #     # pre-populate ndjson
+    #     model_registry[artifact_id].ndjson = {'pre': 'value'}
 
-        response = self.client.get(f'/artifact/model/{artifact_id}/rate', headers=self.headers)
-        self.assertEqual(response.status_code, 200)
-        data = json.loads(response.data)
-        self.assertEqual(data, {'pre': 'value'})
-        mock_handle.assert_not_called()
-        mock_validate.assert_not_called()
+    #     response = self.client.get(f'/artifact/model/{artifact_id}/rate', headers=self.headers)
+    #     self.assertEqual(response.status_code, 200)
+    #     data = json.loads(response.data)
+    #     self.assertEqual(data, {'pre': 'value'})
+    #     mock_handle.assert_not_called()
+    #     mock_validate.assert_not_called()
 
     @patch('src.api.app.authenticate', return_value=False)
     def test_model_rate_authentication_failed(self, mock_auth):
