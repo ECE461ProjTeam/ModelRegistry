@@ -102,9 +102,10 @@ class TestMetricsRunner:
         assert 0.0 <= summary["NetScore_weighted"] <= 1.0
 
         # Individual metric scores should be in valid range
+        # Note: reviewedness return -1.0 to indicate "no data available"
         for result in results.values():
             if hasattr(result, 'value'):
-                assert 0.0 <= result.value <= 1.0
+                assert result.value == -1.0 or (0.0 <= result.value <= 1.0)
 
 
 class TestNDJSONSchema:

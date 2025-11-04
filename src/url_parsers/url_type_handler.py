@@ -196,6 +196,9 @@ def handle_url(models: Dict[str, List[Optional[str]]]) -> Dict[str, dict]:
             "availability": "availability_latency",
             "dataset_quality": "hf_dataset_latency",
             "code_quality": "github_latency",
+            "reviewedness": "github_latency",
+            # "reproducibility": "github_latency",
+            # "treescore": "github_latency",
         }
 
         results, summary, latencies = run_metrics(default_ops, context=context)
@@ -241,6 +244,12 @@ def handle_url(models: Dict[str, List[Optional[str]]]) -> Dict[str, dict]:
             "dataset_quality_latency": get_latency("dataset_quality"),
             "code_quality": get_metric("code_quality"),
             "code_quality_latency": get_latency("code_quality"),
+            "reviewedness": get_metric("reviewedness"),
+            "reviewedness_latency": get_latency("reviewedness"),
+            "reproducibility": get_metric("reproducibility"),
+            "reproducibility_latency": get_latency("reproducibility"),
+            "treescore": get_metric("treescore"),
+            "treescore_latency": get_latency("treescore"),
         }
 
         ndjsons[key] = default_ndjson(

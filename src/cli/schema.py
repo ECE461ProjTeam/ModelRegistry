@@ -25,7 +25,13 @@ def default_ndjson(
         dataset_quality=None,
         dataset_quality_latency=None,
         code_quality=None,
-        code_quality_latency=None):
+        code_quality_latency=None,
+        reviewedness=None,
+        reviewedness_latency=None,
+        reproducibility=None,
+        reproducibility_latency=None,
+        treescore=None,
+        treescore_latency=None):
 
     if category is not None:
         hf_match = re.match(r"https?://huggingface\.co/([^/]+)/([^/]+)", model)
@@ -70,25 +76,43 @@ def default_ndjson(
         "dataset_quality": score(dataset_quality),
         "dataset_quality_latency": latency(dataset_quality_latency),
         "code_quality": score(code_quality),
-        "code_quality_latency": latency(code_quality_latency)}
+        "code_quality_latency": latency(code_quality_latency),
+        "reviewedness": score(reviewedness),
+        "reviewedness_latency": latency(reviewedness_latency),
+        "reproducibility": score(reproducibility),
+        "reproducibility_latency": latency(reproducibility_latency),
+        "treescore": score(treescore),
+        "treescore_latency": latency(treescore_latency)
+    }
 
     weights = {
         "size": 0.05,
-        "license": 0.1,
-        "ramp_up_time": 0.1,
-        "bus_factor": 0.1,
-        "availability": 0.15,
+        "license": 0.08,
+        "ramp_up_time": 0.10,
+        "bus_factor": 0.08,
+        "availability": 0.12,
         "dataset_quality": 0.15,
-        "code_quality": 0.15,
-        "performance_claims": 0.2
+        "code_quality": 0.12,
+        "performance_claims": 0.10,
+        "reviewedness": 0.07,
+        "reproducibility": 0.08,
+        "treescore": 0.05
     }
 
     weights_sum = sum(weights.values())
 
     # add all score values with weights to a netscore
-    ndjson["net_score"] = ((ndjson["ramp_up_time"] * weights["ramp_up_time"] + ndjson["bus_factor"] * weights["bus_factor"] + ndjson["performance_claims"] * weights["performance_claims"] + ndjson["license"] * weights["license"] +
+    ndjson["net_score"] = ((ndjson["ramp_up_time"] * weights["ramp_up_time"] + 
+                            ndjson["bus_factor"] * weights["bus_factor"] + 
+                            ndjson["performance_claims"] * weights["performance_claims"] + 
+                            ndjson["license"] * weights["license"] +
                             ((ndjson["size_score"]["raspberry_pi"] + ndjson["size_score"]["jetson_nano"] + ndjson["size_score"]["desktop_pc"] + ndjson["size_score"]["aws_server"]) / 4) * weights["size"] +
-                            ndjson["dataset_and_code_score"] * weights["availability"]) + ndjson["dataset_quality"] * weights["dataset_quality"] + ndjson["code_quality"] * weights["code_quality"]) / weights_sum
+                            ndjson["dataset_and_code_score"] * weights["availability"] + 
+                            ndjson["dataset_quality"] * weights["dataset_quality"] + 
+                            ndjson["code_quality"] * weights["code_quality"] +
+                            ndjson["reviewedness"] * weights["reviewedness"] +
+                            ndjson["reproducibility"] * weights["reproducibility"] +
+                            ndjson["treescore"] * weights["treescore"]) / weights_sum)
 
     # calculate latency as sum of all latencies
     ndjson["net_score_latency"] = (
@@ -99,6 +123,9 @@ def default_ndjson(
         ndjson["size_score_latency"] +
         ndjson["dataset_and_code_score_latency"] +
         ndjson["dataset_quality_latency"] +
-        ndjson["code_quality_latency"])
+        ndjson["code_quality_latency"] +
+        ndjson["reviewedness_latency"] +
+        ndjson["reproducibility_latency"] +
+        ndjson["treescore_latency"])
 
     return ndjson

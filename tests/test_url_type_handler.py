@@ -166,6 +166,7 @@ class TestGenAIIntegration:
             if original_key:
                 os.environ["GEN_AI_STUDIO_API_KEY"] = original_key
 
+
     @patch('src.url_parsers.url_type_handler.PURDUE_GENAI_API_KEY', 'test_key')
     @patch('requests.post')
     def test_genai_single_url_success(self, mock_post):
