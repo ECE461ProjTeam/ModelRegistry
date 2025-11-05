@@ -16,8 +16,8 @@ class Config:
     SQLALCHEMY_TRACK_MODIFICATIONS = False # to suppress warnings
 
     # Authentication settings
-    TOKEN_EXPIRE_SECONDS = 36000   # 10 hours
-    MAX_REQUESTS_PER_TOKEN = 1000
+    TOKEN_EXPIRE_SECONDS = os.environ.get("TOKEN_EXPIRE_SECONDS")
+    MAX_REQUESTS_PER_TOKEN = os.environ.get("MAX_REQUESTS_PER_TOKEN")
 
 
 class TestConfig(Config):
@@ -28,5 +28,5 @@ class TestConfig(Config):
     SQLALCHEMY_DATABASE_URI = "sqlite:///test_model_registry.db"
     
     # Shorten token expiry and request limits for testing
-    TOKEN_EXPIRE_SECONDS = 600
-    MAX_REQUESTS_PER_TOKEN = 10
+    TOKEN_EXPIRE_SECONDS = os.environ.get("TEST_TOKEN_EXPIRE_SECONDS", 600)
+    MAX_REQUESTS_PER_TOKEN = os.environ.get("TEST_MAX_REQUESTS_PER_TOKEN", 10)

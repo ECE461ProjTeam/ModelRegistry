@@ -11,7 +11,7 @@ from flask_jwt_extended import create_access_token, jwt_required, get_jwt_identi
 from .extensions import db
 from .models import User, TokenUsage
 from .config import Config, TestConfig
-from datetime import timedelta
+from datetime import timedelta, datetime, timezone
 import os
 
 
@@ -100,7 +100,8 @@ def authenticate():
     token_record = TokenUsage(
         jti=jti,
         user_id=fetch_user.id,
-        usage_count=0
+        usage_count=0,
+        expires_at=datetime.now(timezone.utc) + timedelta(seconds=config.TOKEN_EXPIRE_SECONDS)
     )
     db.session.add(token_record)
     db.session.commit()
