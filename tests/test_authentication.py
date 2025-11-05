@@ -12,7 +12,6 @@ import unittest
 from src.api.app import app
 from src.api.models import User
 from src.api.extensions import db
-from flask_jwt_extended import create_access_token
 import os
 from dotenv import load_dotenv
 load_dotenv()

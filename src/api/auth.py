@@ -8,18 +8,14 @@ extensions configured in `extensions.py`.
 
 from flask import Blueprint, request, jsonify
 from flask_jwt_extended import create_access_token, jwt_required, get_jwt_identity, get_jwt
-from flask_bcrypt import Bcrypt
 from .extensions import db
 from .models import User
-from .config import *
-from sqlalchemy import update as sqlalchemy_update
-from sqlalchemy import select, update
-from sqlalchemy.exc import OperationalError
-from datetime import datetime, timedelta, timezone
+from .config import Config, TestConfig
+from sqlalchemy import update
+from datetime import timedelta
 import os
 
 
-bcrypt = Bcrypt()
 auth_bp = Blueprint("auth_bp", __name__)
 config = TestConfig if os.environ.get("DEBUG") == "True" else Config
 from src.logger import get_logger
@@ -41,7 +37,6 @@ def create_default_admin():
         name=admin_name,
         is_admin=True,
         # permissions=["upload", "download", "search"],
-        last_reset=datetime.now(timezone.utc)
     )
     new_admin.set_password(admin_password)
     db.session.add(new_admin)
@@ -75,8 +70,6 @@ def increment_request_count(user_name):
             user.request_count = user.request_count + 1
             db.session.commit()
             new_count = user.request_count
-            
-            print(new_count)
     except Exception as e:
         db.session.rollback()
         return False
@@ -126,18 +119,6 @@ def authenticate():
     # Verify password
     if not fetch_user.check_password(secret["password"]):
         return jsonify({'error': 'Invalid credentials.'}), 401
-    
-    # Reset request count if expired
-    # fetch_user.last_reset may be stored as a naive datetime in some DBs
-    # (no tzinfo). Coerce to UTC-aware before arithmetic to avoid
-    # "can't subtract offset-naive and offset-aware datetimes" errors.
-    last_reset = fetch_user.last_reset
-    if last_reset is None:
-        # If not set, treat as very old so it will reset
-        last_reset = datetime.fromtimestamp(0, timezone.utc)
-    elif last_reset.tzinfo is None:
-        # Assume naive timestamps are in UTC
-        last_reset = last_reset.replace(tzinfo=timezone.utc)
 
     # Create JWT token
     access_token = create_access_token(
@@ -152,7 +133,6 @@ def authenticate():
     # (Token expiry itself is handled by Flask-JWT-Extended via the
     # `expires_delta` above.)
     fetch_user.request_count = 0
-    fetch_user.last_reset = datetime.now(timezone.utc)
     db.session.commit()
 
     return jsonify({'token': access_token}), 200
@@ -284,7 +264,6 @@ def get_profile():
         "name": fetch_user.name,
         "is_admin": fetch_user.is_admin,
         "request_count": fetch_user.request_count,
-        "last_reset": fetch_user.last_reset.isoformat()
     }
     
     return jsonify({'profile': user_profile}), 200

@@ -6,7 +6,6 @@ Tests are based on the ECE 461 Fall 2025 OpenAPI specification.
 import unittest
 import json
 import sys
-from unittest.mock import MagicMock
 import os
 from dotenv import load_dotenv
 load_dotenv()

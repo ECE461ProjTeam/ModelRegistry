@@ -10,11 +10,10 @@ platforms like Elastic Beanstalk) can discover the callable.
 
 from flask import Flask, jsonify, request
 from flask_jwt_extended import jwt_required, get_jwt_identity, verify_jwt_in_request, get_jwt
-from flask_sqlalchemy import SQLAlchemy # For database interactions
-from flask_bcrypt import Bcrypt # For password hashing
 from .classes import *
 from src.logger import get_logger
-from .auth import *
+from .auth import auth_bp, create_default_admin, increment_request_count
+from .models import User
 from .config import Config, TestConfig
 from .extensions import init_extensions, db
 import os
@@ -40,7 +39,7 @@ init_extensions(app)
 with app.app_context():
     db.create_all()
     # Delete the old admin if it exists
-    admin_user = User.query.filter_by(name="ece30861defaultadminuser").first()
+    admin_user = User.query.filter_by(name=os.environ.get("DEFAULT_USER")).first()
     if admin_user:
         db.session.delete(admin_user)
         db.session.commit()
@@ -273,7 +272,11 @@ def get_tracks():
 
 
 def run_api():
-    app.run(host='0.0.0.0', port=os.environ.get("PORT", 5000), debug=os.environ.get("DEBUG", False))
+    app.run(
+        host='0.0.0.0',
+        port=int(os.environ.get("PORT", 5000)),
+        debug=os.environ.get("DEBUG", "False") == "True"
+    )
 
 
 if __name__ == '__main__':

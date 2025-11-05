@@ -17,7 +17,6 @@ class User(db.Model):
     is_admin = db.Column(db.Boolean, default=False)
     # permissions = db.Column(db.JSON, nullable=False, default=list)
     request_count = db.Column(db.Integer, default=0)
-    last_reset = db.Column(db.DateTime, default=datetime.now(timezone.utc))
 
     def set_password(self, plain_password):
         """Hashes the password using bcrypt before storing it."""
