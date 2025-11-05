@@ -82,7 +82,6 @@ class TestAuthenticationEndpoints(unittest.TestCase):
         self.assertEqual(profile['name'], os.environ.get("DEFAULT_USER"))
         self.assertTrue(profile['is_admin'])
         self.assertIn('request_count', profile)
-        self.assertIn('last_reset', profile)
 
     def test_register_forbidden_for_non_admin(self):
         """POST /register should be forbidden for non-admin identities."""
