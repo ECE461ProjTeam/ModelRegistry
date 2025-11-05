@@ -180,7 +180,7 @@ def register():
     # Check if user already exists
     existing_user = User.query.filter_by(name=user["name"]).first()
     if existing_user:
-        return jsonify({'message': 'User already exists.'}), 400
+        return jsonify({'error': 'User already exists.'}), 400
     
     # Create new user
     new_user = User(name=user["name"], is_admin=user["is_admin"])
