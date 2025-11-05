@@ -3,6 +3,9 @@ on: [push, pull_request]
 jobs:
   test:
     runs-on: ubuntu-latest
+    env:
+      DEFAULT_USER: ${{ secrets.DEFAULT_USER }}
+      DEFAULT_PASSWORD: ${{ secrets.DEFAULT_PASSWORD }}
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-python@v5
