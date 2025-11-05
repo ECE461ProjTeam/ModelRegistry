@@ -9,6 +9,12 @@ import os
 
 # Ensure src is in path for all tests
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), 'src'))
+# Ensure tests load the TestConfig in src.api.config by default so
+# extensions (like SQLAlchemy) have a valid DATABASE_URI during import.
+# This makes pytest collection import-safe in CI without requiring repo
+# secrets. If you prefer, set DEBUG=True or DATABASE_URL in your CI
+# environment instead of this change.
+os.environ.setdefault("DEBUG", "True")
 
 
 def pytest_configure(config):
