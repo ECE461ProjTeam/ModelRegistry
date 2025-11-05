@@ -26,4 +26,3 @@ class User(db.Model):
         """Checks a plain-text password against the stored bcrypt hash."""
         return check_password_hash(self.password, plain_password)
     
-
