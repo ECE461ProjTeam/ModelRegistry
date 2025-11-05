@@ -57,6 +57,7 @@ class TestAPIEndpoints(unittest.TestCase):
         try:
             self._ctx.pop()
         except Exception:
+            # Ignore exceptions during context pop in teardown to avoid masking test failures.
             pass
 
 
