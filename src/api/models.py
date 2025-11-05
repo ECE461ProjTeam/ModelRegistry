@@ -7,7 +7,6 @@ to a database when the Flask app is initialized.
 """
 
 from .extensions import db
-from datetime import datetime, timezone
 from flask_bcrypt import generate_password_hash, check_password_hash
 
 class User(db.Model):
