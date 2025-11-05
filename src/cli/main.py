@@ -81,14 +81,10 @@ def validate_ndjson(record: Dict[str, Any]) -> bool:
         "size_score",
         "dataset_and_code_score",
         "dataset_quality",
-<<<<<<< HEAD
         "code_quality",
         "reviewedness",
         "reproducibility",
         "treescore"}
-=======
-        "code_quality"}
->>>>>>> 9d6c4e1 (Initial commit without sensitive history (#16))
     latency_fields = {
         "net_score_latency",
         "ramp_up_time_latency",
@@ -98,14 +94,10 @@ def validate_ndjson(record: Dict[str, Any]) -> bool:
         "size_score_latency",
         "dataset_and_code_score_latency",
         "dataset_quality_latency",
-<<<<<<< HEAD
         "code_quality_latency",
         "reviewedness_latency",
         "reproducibility_latency",
         "treescore_latency"}
-=======
-        "code_quality_latency"}
->>>>>>> 9d6c4e1 (Initial commit without sensitive history (#16))
 
     if not isinstance(record, dict):
         return False
@@ -126,12 +118,9 @@ def validate_ndjson(record: Dict[str, Any]) -> bool:
         # if socre_metric is a dict, check inner values
         if isinstance(score_metric, dict):
             for k, v in score_metric.items():
-<<<<<<< HEAD
                 # allow -1 for unavailable
                 if v == -1.0 or v == -1:
                     continue
-=======
->>>>>>> 9d6c4e1 (Initial commit without sensitive history (#16))
                 if v is not None and (
                     not isinstance(
                         v, (float)) or not (
@@ -140,11 +129,8 @@ def validate_ndjson(record: Dict[str, Any]) -> bool:
         else:
             # score can be none or float between 0 and 1
             if score_metric is not None:
-<<<<<<< HEAD
                 if score_metric == -1.0 or score_metric == -1:
                     continue
-=======
->>>>>>> 9d6c4e1 (Initial commit without sensitive history (#16))
                 if not isinstance(
                         score_metric, (float)) or not (
                         0.00 <= score_metric <= 1.00):
@@ -272,27 +258,18 @@ def main() -> int:
             ndjsons = evaluate_url(models)
 
             for ndjson in ndjsons.values():
-<<<<<<< HEAD
                 logger.debug(f"Validating NDJSON for model {ndjson.get('name', 'unknown')}")
-=======
->>>>>>> 9d6c4e1 (Initial commit without sensitive history (#16))
                 if validate_ndjson(ndjson):
                     print(json.dumps(ndjson, separators=(",", ":")))
                 else:
                     name = ndjson.get("name", "unknown")
-<<<<<<< HEAD
                     logger.error(f"Invalid NDJSON for model {name}: {ndjson}")
-=======
->>>>>>> 9d6c4e1 (Initial commit without sensitive history (#16))
                     print(json.dumps(
                         {"name": name, "error": "Invalid record"}))
 
             return 0
 
     except Exception as e:
-<<<<<<< HEAD
         logger.error(f"Exception occurred: {e}")
-=======
->>>>>>> 9d6c4e1 (Initial commit without sensitive history (#16))
         print(f"ERROR: {e}", file=sys.stderr)
         return 1
