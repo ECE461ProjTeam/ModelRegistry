@@ -7,11 +7,10 @@ extensions configured in `extensions.py`.
 """
 
 from flask import Blueprint, request, jsonify
-from flask_jwt_extended import create_access_token, jwt_required, get_jwt_identity, get_jwt
+from flask_jwt_extended import create_access_token, jwt_required, get_jwt_identity, get_jwt, get_jti
 from .extensions import db
-from .models import User
+from .models import User, TokenUsage
 from .config import Config, TestConfig
-from sqlalchemy import update
 from datetime import timedelta
 import os
 
@@ -36,47 +35,11 @@ def create_default_admin():
     new_admin = User(
         name=admin_name,
         is_admin=True,
-        # permissions=["upload", "download", "search"],
+        permissions=["upload", "download", "search"],
     )
     new_admin.set_password(admin_password)
     db.session.add(new_admin)
     db.session.commit()
-
-
-def increment_request_count(user_name):
-    """Atomically increment the request_count for any supported DB (Sqlite for local, Postgres for production)."""
-    try:
-        # Detect DB dialect
-        bind = db.session.get_bind()
-        if not bind:
-            return False
-        dialect = bind.dialect.name
-        
-        if dialect == "postgresql":
-            stmt = (
-                update(User)
-                .where(User.name == user_name)
-                .values(request_count=User.request_count + 1)
-                .returning(User.request_count)
-            )
-            result = db.session.execute(stmt)
-            new_count = result.scalar_one_or_none()
-
-        else:
-            # SQLite fallback (no RETURNING)
-            user = User.query.filter_by(name=user_name).first()
-            if not user:
-                return False
-            user.request_count = user.request_count + 1
-            db.session.commit()
-            new_count = user.request_count
-    except Exception as e:
-        db.session.rollback()
-        return False
-
-    if new_count is None:
-        return False
-    return new_count <= config.MAX_REQUESTS_PER_USER
 
 
 @auth_bp.route('/authenticate', methods=['PUT'])
@@ -125,15 +88,27 @@ def authenticate():
         identity=fetch_user.name,
         additional_claims={
             "is_admin": fetch_user.is_admin,
+            "permissions": fetch_user.permissions
         },
         expires_delta=timedelta(seconds=config.TOKEN_EXPIRE_SECONDS)
     )
+
+    # Get the unique identifier (JTI) of this token
+    jti = get_jti(encoded_token=access_token)
+
+    # Add a new TokenUsage record for this token
+    token_record = TokenUsage(
+        jti=jti,
+        user_id=fetch_user.id,
+        usage_count=0
+    )
+    db.session.add(token_record)
+    db.session.commit()
+
     # Whenever we issue a new token, reset the request counter and update
     # the last_reset timestamp so the user starts with a fresh quota.
     # (Token expiry itself is handled by Flask-JWT-Extended via the
     # `expires_delta` above.)
-    fetch_user.request_count = 0
-    db.session.commit()
 
     return jsonify({'token': access_token}), 200
 
@@ -210,6 +185,18 @@ def delete_profile():
         400 Bad Request: If any required field is missing or invalid.
         403 Forbidden: If the current user is not authorized to delete the specified profile.
     """
+    # Check if current user is authorized to delete the profile
+    request_user = get_jwt_identity()
+    
+    # Verify admin permissions
+    claims = get_jwt()  # dict with additional_claims
+    is_admin = claims.get("is_admin", False)
+
+    # Allow deletion if the requester is the owner OR an admin.
+    # Deny only when the requester is neither the owner nor an admin.
+    if request_user != user.get("name") and not is_admin:
+        return jsonify({'error': 'Not authorized to delete this profile.'}), 403
+    
     # Check if request is JSON
     if not request or not request.is_json:
         return jsonify({'error': 'Invalid request format.'}), 400
@@ -225,18 +212,6 @@ def delete_profile():
     fetch_user = User.query.filter_by(name=user["name"]).first()
     if not fetch_user:
         return jsonify({'error': 'User not found.'}), 400
-    
-    # Check if current user is authorized to delete the profile
-    request_user = get_jwt_identity()
-    
-    # Verify admin permissions
-    claims = get_jwt()  # dict with additional_claims
-    is_admin = claims.get("is_admin", False)
-
-    # Allow deletion if the requester is the owner OR an admin.
-    # Deny only when the requester is neither the owner nor an admin.
-    if request_user != user.get("name") and not is_admin:
-        return jsonify({'error': 'Not authorized to delete this profile.'}), 403
     
     # Delete user profile
     db.session.delete(fetch_user)
@@ -263,7 +238,24 @@ def get_profile():
     user_profile = {
         "name": fetch_user.name,
         "is_admin": fetch_user.is_admin,
-        "request_count": fetch_user.request_count,
     }
     
     return jsonify({'profile': user_profile}), 200
+
+
+@auth_bp.route('/users', methods=['GET'])
+@jwt_required()
+def get_users():
+    """Admin is permitted to view list of all users"""
+    # Verify admin permissions
+    claims = get_jwt()  # dict with additional_claims
+    is_admin = claims.get("is_admin", False)
+
+    if not is_admin:
+        return jsonify({'error': 'Admin privileges required to view user list.'}), 403
+    
+    users = User.query.all()
+    user_list = [{"name": user.name, "is_admin": user.is_admin} for user in users]
+    
+    return jsonify({'users': user_list}), 200
+    

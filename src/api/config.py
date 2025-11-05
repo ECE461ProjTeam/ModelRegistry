@@ -17,7 +17,7 @@ class Config:
 
     # Authentication settings
     TOKEN_EXPIRE_SECONDS = 36000   # 10 hours
-    MAX_REQUESTS_PER_USER = 1000
+    MAX_REQUESTS_PER_TOKEN = 1000
 
 
 class TestConfig(Config):
@@ -29,4 +29,4 @@ class TestConfig(Config):
     
     # Shorten token expiry and request limits for testing
     TOKEN_EXPIRE_SECONDS = 600
-    MAX_REQUESTS_PER_USER = 10
+    MAX_REQUESTS_PER_TOKEN = 10

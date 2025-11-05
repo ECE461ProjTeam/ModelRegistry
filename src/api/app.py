@@ -9,11 +9,11 @@ platforms like Elastic Beanstalk) can discover the callable.
 """
 
 from flask import Flask, jsonify, request
-from flask_jwt_extended import jwt_required, get_jwt_identity, verify_jwt_in_request, get_jwt
+from flask_jwt_extended import jwt_required, get_jwt
 from .classes import *
 from src.logger import get_logger
-from .auth import auth_bp, create_default_admin, increment_request_count
-from .models import User
+from .auth import auth_bp, create_default_admin
+from .models import User, TokenUsage
 from .config import Config, TestConfig
 from .extensions import init_extensions, db
 import os
@@ -40,40 +40,31 @@ with app.app_context():
     db.create_all()
     # Delete the old admin if it exists
     admin_user = User.query.filter_by(name=os.environ.get("DEFAULT_USER")).first()
-    if admin_user:
-        db.session.delete(admin_user)
-        db.session.commit()
-    create_default_admin()
+    if not admin_user:
+        create_default_admin()
 
 app.register_blueprint(auth_bp)
 
 
 @app.before_request
-def enforce_request_quota():
-    """Middleware to enforce per-user request quotas before each request."""
-    # Support clients that send a non-standard `X-Authorization` header by
-    # copying it into the WSGI environ as `HTTP_AUTHORIZATION` so
-    # flask-jwt-extended can find it as if it were the standard
-    # `Authorization: Bearer <token>` header.
-    x_auth = request.headers.get('X-Authorization')
-    if x_auth and not request.headers.get('Authorization'):
-        # Werkzeug/Flask expose HTTP headers via the WSGI environ keys.
-        request.environ['HTTP_AUTHORIZATION'] = x_auth
+@jwt_required(optional=True)
+def enforce_request_limit():
+    jwt_data = get_jwt()
+    if not jwt_data:
+        return  # no token (public route)
 
-    try:
-        # ask flask-jwt-extended to verify a token if present (optional)
-        verify_jwt_in_request(optional=True)
-    except Exception:
-        # no valid JWT present — let endpoint decorators handle it
-        return
+    jti = jwt_data["jti"]
+    token = TokenUsage.query.filter_by(jti=jti).first()
 
-    user_identity = get_jwt_identity()
-    if not user_identity:
-        return
-    
-    if not increment_request_count(user_identity):
-        return jsonify({'error': 'Authentication Failed. Maximum request limit exceeded.'}), 403
+    if not token:
+        return jsonify({"error": "Invalid or unknown token"}), 403
 
+    if token.is_expired:
+        db.session.delete(token)
+        db.session.commit()
+        return jsonify({"msg": "Token expired after max requests"}), 403
+
+    token.increment_usage()
 
 @app.route('/', methods=['GET'])
 def index():
@@ -83,7 +74,7 @@ def index():
 @app.route('/health', methods=['GET'])
 def health():
     """Health check route."""
-    return jsonify({'description': 'Service reachable.'}), 200
+    return jsonify({'message': 'Service reachable.'}), 200
 
 
 @app.route('/artifacts', methods=['POST'])
@@ -117,14 +108,6 @@ def ArtifactsList():
 @jwt_required()
 def RegistryReset():
     """Reset the registry to a system default state."""
-    
-    # Verify admin permissions
-    claims = get_jwt()  # dict with additional_claims
-    is_admin = claims.get("is_admin", False)
-
-    if not is_admin:
-        return jsonify({'message': 'You do not have permission to reset the registry.'}), 401
-    
     logger.info("Resetting the model registry to default state.")
     model_registry.clear()
 
@@ -135,7 +118,6 @@ def RegistryReset():
 @jwt_required()
 def ArtifactRetrieve(artifact_type, id):
     """Return this artifact."""
-    
     if artifact_type not in ["model", "dataset", "code"] or not id.isdigit():
         return jsonify({'message': 'There is missing field(s) in the artifact_type or artifact_id or it is formed improperly, or is invalid.'}), 400
 
@@ -155,7 +137,6 @@ def ArtifactRetrieve(artifact_type, id):
 @jwt_required()
 def ArtifactUpdate(artifact_type, id):
     """The name, version, and id must match. The artifact source (from artifact_data) will replace the previous contents."""
-    
     if artifact_type not in ["model", "dataset", "code"] or not id.isdigit():
         return jsonify({'message': 'There is missing field(s) in the artifact_type or artifact_id or it is formed improperly, or is invalid.'}), 400
     
@@ -180,7 +161,7 @@ def ArtifactUpdate(artifact_type, id):
 @app.route('/artifacts/<artifact_type>/<id>', methods=['DELETE'])
 @jwt_required()
 def ArtifactDelete(artifact_type, id):
-    """Delete only the artifact that matches 'id'. (id is a unique identifier for an artifact)."""
+    """Delete only the artifact that matches 'id'. (id is a unique identifier for an artifact)."""    
     return jsonify({'message': 'Not implemented'}), 501
 
 
@@ -214,8 +195,6 @@ def ArtifactCreate(artifact_type):
 @jwt_required()
 def ModelArtifactRate(id):
     """Get ratings for this model artifact. (BASELINE)."""
-    
-    
     return jsonify({'message': 'Not implemented'}), 501
 
 
