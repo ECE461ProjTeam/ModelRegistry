@@ -22,13 +22,18 @@ class TestAuthenticationEndpoints(unittest.TestCase):
         self.app = app
         self.client = self.app.test_client()
         self.app.testing = True
+        # Push an application context so helpers like create_access_token
+        # and DB operations that rely on current_app work inside tests.
+        self._ctx = self.app.app_context()
+        self._ctx.push()
 
     def tearDown(self):
         # Remove any non-default users created during tests
-        with self.app.app_context():
-            # keep the default admin user, remove others
-            User.query.filter(User.name != os.environ.get("DEFAULT_USER")).delete()
-            db.session.commit()
+        # keep the default admin user, remove others
+        User.query.filter(User.name != os.environ.get("DEFAULT_USER")).delete()
+        db.session.commit()
+        # Pop the application context we pushed in setUp
+        self._ctx.pop()
 
     def test_authenticate_success(self):
         """PUT /authenticate should return a token for valid credentials."""
@@ -59,7 +64,15 @@ class TestAuthenticationEndpoints(unittest.TestCase):
         The endpoints expect the JWT identity to be a mapping with keys
         "name" and "is_admin" so we construct the token that way.
         """
-        token = create_access_token(identity={"name": os.environ.get("DEFAULT_USER"), "is_admin": True})
+        # obtain a real token via the authenticate endpoint so token format
+        # matches what the app issues and what the middleware expects.
+        auth_payload = {
+            "user": {"name": os.environ.get("DEFAULT_USER")},
+            "secret": {"password": os.environ.get("DEFAULT_PASSWORD")}
+        }
+        auth_resp = self.client.put('/authenticate', json=auth_payload)
+        self.assertEqual(auth_resp.status_code, 200)
+        token = auth_resp.get_json()['token']
         headers = {"Authorization": f"Bearer {token}"}
 
         resp = self.client.get('/profile', headers=headers)
@@ -74,7 +87,17 @@ class TestAuthenticationEndpoints(unittest.TestCase):
 
     def test_register_forbidden_for_non_admin(self):
         """POST /register should be forbidden for non-admin identities."""
-        token = create_access_token(identity={"name": "someuser", "is_admin": False})
+        # create the non-admin user in the DB and authenticate to get a token
+        with self.app.app_context():
+            u = User(name='someuser', is_admin=False)
+            u.set_password('pw')
+            db.session.add(u)
+            db.session.commit()
+
+        auth_payload = {"user": {"name": 'someuser'}, "secret": {"password": 'pw'}}
+        auth_resp = self.client.put('/authenticate', json=auth_payload)
+        self.assertEqual(auth_resp.status_code, 200)
+        token = auth_resp.get_json()['token']
         headers = {"Authorization": f"Bearer {token}"}
 
         payload = {
@@ -89,7 +112,13 @@ class TestAuthenticationEndpoints(unittest.TestCase):
 
     def test_register_success_as_admin(self):
         """Admin can register a new user via POST /register."""
-        token = create_access_token(identity={"name": os.environ.get("DEFAULT_USER"), "is_admin": True})
+        auth_payload = {
+            "user": {"name": os.environ.get("DEFAULT_USER")},
+            "secret": {"password": os.environ.get("DEFAULT_PASSWORD")}
+        }
+        auth_resp = self.client.put('/authenticate', json=auth_payload)
+        self.assertEqual(auth_resp.status_code, 200)
+        token = auth_resp.get_json()['token']
         headers = {"Authorization": f"Bearer {token}"}
 
         payload = {
@@ -115,8 +144,11 @@ class TestAuthenticationEndpoints(unittest.TestCase):
             u.set_password('deletepw')
             db.session.add(u)
             db.session.commit()
-
-        token = create_access_token(identity={"name": 'tobedeleted', "is_admin": False})
+        # obtain token by authenticating as the newly created user
+        auth_payload = {"user": {"name": 'tobedeleted'}, "secret": {"password": 'deletepw'}}
+        auth_resp = self.client.put('/authenticate', json=auth_payload)
+        self.assertEqual(auth_resp.status_code, 200)
+        token = auth_resp.get_json()['token']
         headers = {"Authorization": f"Bearer {token}"}
         payload = {"user": {"name": 'tobedeleted'}}
 
@@ -139,8 +171,14 @@ class TestAuthenticationEndpoints(unittest.TestCase):
             db.session.add(u)
             db.session.commit()
 
-        # admin token
-        token = create_access_token(identity={"name": os.environ.get("DEFAULT_USER"), "is_admin": True})
+        # admin token (get via authenticate endpoint)
+        auth_payload = {
+            "user": {"name": os.environ.get("DEFAULT_USER")},
+            "secret": {"password": os.environ.get("DEFAULT_PASSWORD")}
+        }
+        auth_resp = self.client.put('/authenticate', json=auth_payload)
+        self.assertEqual(auth_resp.status_code, 200)
+        token = auth_resp.get_json()['token']
         headers = {"Authorization": f"Bearer {token}"}
         payload = {"user": {"name": 'otheruser'}}
 
