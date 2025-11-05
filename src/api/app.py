@@ -14,6 +14,11 @@ def index():
     """Index route to verify that the API is running."""
     return jsonify({'message': 'Model Registry API is running'}), 200
 
+@app.route('/health', methods=['GET'])
+def health():
+    """Health check route."""
+    return jsonify({'description': 'Service reachable.'}), 200
+
 @app.route('/artifacts', methods=['POST'])
 def ArtifactsList():
     """Get any artifacts fitting the query. Search for artifacts satisfying the indicated query.
