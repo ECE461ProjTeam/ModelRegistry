@@ -52,10 +52,21 @@ app.register_blueprint(auth_bp)
 @app.before_request
 def enforce_request_quota():
     """Middleware to enforce per-user request quotas before each request."""
+    # Support clients that send a non-standard `X-Authorization` header by
+    # copying it into the WSGI environ as `HTTP_AUTHORIZATION` so
+    # flask-jwt-extended can find it as if it were the standard
+    # `Authorization: Bearer <token>` header.
+    x_auth = request.headers.get('X-Authorization')
+    if x_auth and not request.headers.get('Authorization'):
+        # Werkzeug/Flask expose HTTP headers via the WSGI environ keys.
+        request.environ['HTTP_AUTHORIZATION'] = x_auth
+
     try:
+        # ask flask-jwt-extended to verify a token if present (optional)
         verify_jwt_in_request(optional=True)
     except Exception:
-        return  # no valid JWT present — let endpoint decorators handle it
+        # no valid JWT present — let endpoint decorators handle it
+        return
 
     user_identity = get_jwt_identity()
     if not user_identity:
@@ -145,9 +156,6 @@ def ArtifactRetrieve(artifact_type, id):
 @jwt_required()
 def ArtifactUpdate(artifact_type, id):
     """The name, version, and id must match. The artifact source (from artifact_data) will replace the previous contents."""
-    
-    if not authenticate():
-        return jsonify({'message': 'Authentication failed due to invalid or missing AuthenticationToken.'}), 403
     
     if artifact_type not in ["model", "dataset", "code"] or not id.isdigit():
         return jsonify({'message': 'There is missing field(s) in the artifact_type or artifact_id or it is formed improperly, or is invalid.'}), 400
