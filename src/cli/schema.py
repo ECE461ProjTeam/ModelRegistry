@@ -77,9 +77,9 @@ def default_ndjson(
         "dataset_quality_latency": latency(dataset_quality_latency),
         "code_quality": score(code_quality),
         "code_quality_latency": latency(code_quality_latency),
-        "reviewedness": score(reviewedness),
+        "reviewedness": reviewedness, # allow a score of 0.0
         "reviewedness_latency": latency(reviewedness_latency),
-        "reproducibility": score(reproducibility),
+        "reproducibility": reproducibility, # allow a score of 0.0
         "reproducibility_latency": latency(reproducibility_latency),
         "treescore": score(treescore),
         "treescore_latency": latency(treescore_latency)
