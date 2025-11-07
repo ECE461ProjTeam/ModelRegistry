@@ -4,6 +4,9 @@ from ..url_parsers.url_type_handler import handle_url
 from ..cli.validate import validate_ndjson
 from src.logger import get_logger
 from .auth import authenticate, getPermissionLevel
+from src.metrics.data_fetcher.huggingface import download_hf_model
+from .s3 import upload_file_to_s3, get_download_link
+import os
 
 logger = get_logger("api.app")
 import re
@@ -30,6 +33,26 @@ class Model(BaseArtifact):
             raise ValueError("Name must be provided for models.")
         self.name = self.name if self.name else hf_match.group(2)
         self.metadata = {'name': self.name, 'id': self.id, 'type': self.type}
+        self.ndjson = {}
+        self.code_url = ""
+        self.dataset_url = ""
+        self.download_link = ""
+        #TODO: determine code and dataset objects linked form registry
+        try:
+            self.rate()
+        except Exception as e:
+            logger.error(f"Error rating model during initialization: {e}")
+            raise RuntimeError("Failed to rate model during initialization")
+        
+        #TODO: uncomment when code and dataset linking is available
+        # if not newArtifact.check_ingestible():
+            #     return jsonify({'description': 'Artifact is not registered due to the disqualified rating.'}), 424
+        
+        try:
+            self.send_to_bucket()
+        except Exception as e:
+            logger.error(f"Error sending model to bucket: {e}")
+            raise RuntimeError("Failed to send model to bucket")
         
     def check_ingestible(self) -> bool:
         if self.ndjson == {}:
@@ -65,6 +88,29 @@ class Model(BaseArtifact):
         
         logger.info(f"Completed rating for model artifact {self.id} with name {self.name}")
         return True
+    
+    def send_to_bucket(self):
+        """Download model files and store them in S3."""
+        logger.info(f"Downloading model files for artifact {self.id} from {self.url}")
+        local_dir = download_hf_model(self.url, cache_dir="./hf_cache")
+        logger.info(f"Downloaded model files to {local_dir}")
+        
+        
+        for root, _, files in os.walk(local_dir):
+            for file in files:
+                local_file_path = os.path.join(root, file)
+                rel_path = os.path.relpath(local_file_path, local_dir)
+                s3_path = f"{self.id}/{rel_path}"
+                logger.info(f"Uploading {local_file_path} to S3 at {s3_path}")
+                success = upload_file_to_s3(local_file_path, s3_path)
+                if not success:
+                    logger.error(f"Failed to upload {local_file_path} to S3")
+                    raise RuntimeError(f"Failed to upload {local_file_path} to S3")
+                
+        logger.info(f"Successfully uploaded model artifact {self.id} to S3")
+
+        self.download_link = get_download_link(self.id)
+
 
                 
 class Dataset(BaseArtifact):
