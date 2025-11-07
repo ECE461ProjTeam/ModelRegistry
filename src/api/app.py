@@ -40,7 +40,10 @@ def ArtifactsList():
             raise ValueError("Missing fields")
     except Exception as e:
         return jsonify({'description': 'There is missing field(s) in the artifact_query or it is formed improperly, or is invalid.'}), 400
-    
+
+    if len(types) == 0:
+        types = ["model", "dataset", "code"]
+
     for model in model_registry.values():
         if model.type in types:
             res.append(model.metadata)
