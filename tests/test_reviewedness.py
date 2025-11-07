@@ -34,6 +34,9 @@ class TestReviewednessUnit:
                     "total_lines_added": 10000,
                     "lines_from_reviewed_prs": 10000,
                 }
+            },
+            "availability": {
+                "has_code": True
             }
         }
         result = metric.compute(context)
@@ -63,6 +66,9 @@ class TestReviewednessUnit:
                     "total_lines_added": 10000,
                     "lines_from_reviewed_prs": 8000,
                 }
+            },
+            "availability": {
+                "has_code": True
             }
         }
         result = metric.compute(context)
@@ -90,6 +96,9 @@ class TestReviewednessUnit:
                     "total_lines_added": 10000,
                     "lines_from_reviewed_prs": 3000,
                 }
+            },
+            "availability": {
+                "has_code": True
             }
         }
         result = metric.compute(context)
@@ -114,6 +123,9 @@ class TestReviewednessUnit:
                     "total_lines_added": 10000,
                     "lines_from_reviewed_prs": 5000,
                 }
+            },
+            "availability": {
+                "has_code": True
             }
         }
         result_50 = metric.compute(context_50)
@@ -129,6 +141,9 @@ class TestReviewednessUnit:
                     "total_lines_added": 10000,
                     "lines_from_reviewed_prs": 4999,
                 }
+            },
+            "availability": {
+                "has_code": True
             }
         }
         result_49 = metric.compute(context_49)
@@ -145,6 +160,9 @@ class TestReviewednessUnit:
                     "total_lines_added": 5000,
                     "lines_from_reviewed_prs": 0,
                 }
+            },
+            "availability": {
+                "has_code": True
             }
         }
         result = metric.compute(context)
@@ -171,6 +189,9 @@ class TestReviewednessUnit:
                     "total_lines_added": 0,
                     "lines_from_reviewed_prs": 0,
                 }
+            },
+            "availability": {
+                "has_code": True
             }
         }
         result = metric.compute(context)
@@ -185,6 +206,9 @@ class TestReviewednessUnit:
             "github": {
                 "stars": 1000,
                 "forks": 500
+            },
+            "availability": {
+                "has_code": True
             }
         }
         result = metric.compute(context)
@@ -202,6 +226,9 @@ class TestReviewednessUnit:
                     "total_lines_added": 4200,
                     "lines_from_reviewed_prs": 3000,
                 }
+            },
+            "availability": {
+                "has_code": True
             }
         }
         result = metric.compute(context)
@@ -218,6 +245,9 @@ class TestReviewednessUnit:
                     "total_lines_added": 5000,
                     "lines_from_reviewed_prs": 4000,
                 }
+            },
+            "availability": {
+                "has_code": True
             }
         }
         result = metric.compute(context)
@@ -251,6 +281,9 @@ class TestReviewednessIntegration:
                     "total_lines_added": 10000,
                     "lines_from_reviewed_prs": 8000,
                 }
+            },
+            "availability": {
+                "has_code": True
             }
         }
         

@@ -35,7 +35,8 @@ class ReviewednessMetric:
         # Get GitHub data from context
         github_data = context.get("github", {})
         # logger.debug(f"GitHub data present: {bool(github_data)}")
-        has_code = context.get("availability").get("has_code", False)
+        availability = context.get("availability", {})
+        has_code = availability.get("has_code", False)
         
         # If no GitHub repo or no code URL, return -1
         if not github_data or not has_code:

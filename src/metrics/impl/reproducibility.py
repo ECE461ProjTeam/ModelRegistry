@@ -23,12 +23,14 @@ class ReproducibilityMetric:
     id = "reproducibility"
 
     def repro_llm_score(self, context: Dict[str, Any]) -> Tuple[float, Dict[str, str]]:
-        target_url = context.get("model_url", "")
-        prompt = """Analyze the reproducibility of this model/repository by examining documentation,
+        target_url = context.get("code_url", "")
+        prompt = """Analyze the reproducibility of this repository by examining documentation,
          dependency specifications, configuration files, and training scripts. Your purpose is to
          determine if this model can be reproduced without requiring an agent debugging it.
-         Respond with 1 if it can be reproduced without debugging, 0, if it can be reproduced with debugging
-         and -1 if it cannot be reproduced at all."""
+         Respond with only a single digit:
+         1: code can be reproduced without debugging
+         0: code can be reproduced with debugging
+         -1: cannot be reproduced at all."""
         
         try:
             # Get GenAI evaluation
@@ -92,12 +94,6 @@ class ReproducibilityMetric:
     def compute(self, context: Dict[str, Any]) -> MetricResult:
         """Calculate reproducibility score.
         
-        Args:
-            context: Dict containing:
-                - github: GitHub repository data
-                - hf_model: HuggingFace model data
-                - hf_dataset: HuggingFace dataset data
-                
         Returns:
             MetricResult with value between 0-1
         """
@@ -109,11 +105,9 @@ class ReproducibilityMetric:
 
         # logger.debug(f"context keys: {context.keys()}")
 
-
         has_readme = context.get("performance_details", {}).get("readme_available", False)
         has_code = context.get("availability", {}).get("has_code", False)
         maintainability = context.get("code_quality", {}).get("maintainability_norm", 0.0)
-
 
         gate_ok = has_readme and has_code and (maintainability > 0.5)
 
@@ -131,7 +125,7 @@ class ReproducibilityMetric:
             #failsafe if LLM says it cannot be reproduced
             if runs_without_debug == -1.0:
                 value = 0.0
-                details = {"FAILED: LLM failsafe"}
+                details = {"reason": "FAILED: LLM failsafe"}
             else: 
                 value=1.0 if runs_without_debug else 0.5
                 details = llm_details
