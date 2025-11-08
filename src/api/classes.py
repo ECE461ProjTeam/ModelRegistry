@@ -106,6 +106,8 @@ class Model(BaseArtifact):
                 logger.debug(f"Adding {local_file_path} as {rel_path} to zip")
                 zout.write(local_file_path, arcname=rel_path)
         zout.close()
+        
+        self.cost = os.path.getsize(f"{local_dir}/{self.id}.zip") / (1024 * 1024)  # size in MB
 
         success = upload_file_to_s3(f"{local_dir}/{self.id}.zip", f"{self.id}.zip")
         if not success:

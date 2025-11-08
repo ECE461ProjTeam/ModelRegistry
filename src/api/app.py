@@ -179,6 +179,7 @@ def RegistryReset():
 
     return jsonify({'description': 'Registry is reset.'}), 200
 
+
 @app.route('/artifacts/<artifact_type>/<id>', methods=['GET'])
 @check_permissions("search", "download")
 def ArtifactRetrieve(artifact_type, id):
@@ -309,7 +310,18 @@ def ModelArtifactRate(id):
 @check_permissions("search")
 def get_artifact_artifact_type_id_cost(artifact_type, id):
     """Get the cost of an artifact (BASELINE)."""
-    return jsonify({'message': 'Not implemented'}), 501
+    if not authenticate():
+        return jsonify({'description': 'Authentication failed due to invalid or missing AuthenticationToken.'}), 403
+    
+    if artifact_type not in ["model", "dataset", "code"] or not id.isdigit():
+        return jsonify({'description': 'There is missing field(s) in the artifact_type or artifact_id or it is formed improperly, or is invalid.'}), 400
+    
+    if id not in model_registry:
+        return jsonify({'description': 'Artifact does not exist.'}), 404
+    
+    result = {}
+    result[id] = {"total_cost": model_registry[id].cost}
+    return jsonify(result), 200
 
 
 @app.route('/artifact/byName/<name>', methods=['GET'])
