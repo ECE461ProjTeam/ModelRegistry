@@ -171,9 +171,13 @@ def RegistryReset():
     db.session.query(Artifact).delete()
     db.session.commit()
     # model_registry.clear()
+    try:
+        clear_s3_bucket()
+    except Exception as e:
+        logger.error(f"Error clearing S3 bucket during reset: {e}")
+        return jsonify({'description': 'Failed to reset the registry due to S3 error.'}), 500
 
-    return jsonify({'message': 'Registry is reset.'}), 200
-
+    return jsonify({'description': 'Registry is reset.'}), 200
 
 @app.route('/artifacts/<artifact_type>/<id>', methods=['GET'])
 @check_permissions("search", "download")
