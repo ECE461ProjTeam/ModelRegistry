@@ -14,6 +14,11 @@ def index():
     """Index route to verify that the API is running."""
     return jsonify({'message': 'Model Registry API is running'}), 200
 
+@app.route('/health', methods=['GET'])
+def health():
+    """Health check route."""
+    return jsonify({'description': 'Service reachable.'}), 200
+
 @app.route('/artifacts', methods=['POST'])
 def ArtifactsList():
     """Get any artifacts fitting the query. Search for artifacts satisfying the indicated query.
@@ -35,7 +40,10 @@ def ArtifactsList():
             raise ValueError("Missing fields")
     except Exception as e:
         return jsonify({'description': 'There is missing field(s) in the artifact_query or it is formed improperly, or is invalid.'}), 400
-    
+
+    if len(types) == 0:
+        types = ["model", "dataset", "code"]
+
     for model in model_registry.values():
         if model.type in types:
             res.append(model.metadata)
