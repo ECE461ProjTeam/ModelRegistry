@@ -23,4 +23,4 @@ def upload_file_to_s3(file_name: str, artifact_id: str) -> bool:
 
 def get_download_link(artifact_id: str) -> str:
     """Generate a download link for an artifact stored in S3."""
-    return f"https://{BUCKET_NAME}.s3.amazonaws.com/{artifact_id}"
+    return f"https://{BUCKET_NAME}.s3.amazonaws.com/{artifact_id}.zip"

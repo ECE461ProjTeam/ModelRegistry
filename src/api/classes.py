@@ -7,6 +7,7 @@ from .auth import authenticate, getPermissionLevel
 from src.metrics.data_fetcher.huggingface import download_hf_model
 from .s3 import upload_file_to_s3, get_download_link
 import os
+import zipfile
 
 logger = get_logger("api.app")
 import re
@@ -58,7 +59,7 @@ class Model(BaseArtifact):
         if self.ndjson == {}:
             return False
         
-        print(self.ndjson)
+        # print(self.ndjson)
         
         for key in self.ndjson:
             if not key.endswith("_latency") and key != "name" and key != "category":
@@ -66,7 +67,7 @@ class Model(BaseArtifact):
                     for subkey in self.ndjson[key]:
                         if self.ndjson[key][subkey] < 0.5:
                             return False
-                print(self.ndjson[key])
+                # print(self.ndjson[key])
                 if self.ndjson[key] < 0.5:
                     return False
         return True
@@ -95,19 +96,25 @@ class Model(BaseArtifact):
         local_dir = download_hf_model(self.url, cache_dir="./hf_cache")
         logger.info(f"Downloaded model files to {local_dir}")
         
-        
+        zout = zipfile.ZipFile(f"{local_dir}/{self.id}.zip", "w")
         for root, _, files in os.walk(local_dir):
             for file in files:
+                if file == f"{self.id}.zip":
+                    continue  # Skip adding the zip file itself
                 local_file_path = os.path.join(root, file)
                 rel_path = os.path.relpath(local_file_path, local_dir)
-                s3_path = f"{self.id}/{rel_path}"
-                logger.info(f"Uploading {local_file_path} to S3 at {s3_path}")
-                success = upload_file_to_s3(local_file_path, s3_path)
-                if not success:
-                    logger.error(f"Failed to upload {local_file_path} to S3")
-                    raise RuntimeError(f"Failed to upload {local_file_path} to S3")
-                
-        logger.info(f"Successfully uploaded model artifact {self.id} to S3")
+                logger.debug(f"Adding {local_file_path} as {rel_path} to zip")
+                zout.write(local_file_path, arcname=rel_path)
+        zout.close()
+
+        success = upload_file_to_s3(f"{local_dir}/{self.id}.zip", f"{self.id}.zip")
+        if not success:
+            logger.error(f"Failed to upload {self.id}.zip to S3")
+            raise RuntimeError(f"Failed to upload {self.id}.zip to S3")
+        
+        logger.info(f"Uploaded zip file {self.id}.zip to S3")
+        
+        os.system(f"rm -rf {local_dir}/{self.id}.zip")
 
         self.download_link = get_download_link(self.id)
 
