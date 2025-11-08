@@ -33,7 +33,7 @@ def ArtifactsList():
     
     res = []
     try:
-        data = request.get_json()
+        data = request.get_json()[0]
         name = data.get("name")
         types = data.get("types")
         if name is None or types is None:
