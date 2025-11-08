@@ -220,6 +220,9 @@ def handle_url(models: Dict[str, List[Optional[str]]]) -> Dict[str, dict]:
         license_seconds = license_metric.seconds * 1000 if license_metric else None
         bus_factor_metric = results.get("bus_factor")
         bus_factor_seconds = bus_factor_metric.seconds * 1000 if bus_factor_metric else None
+        reproducibility_metric = results.get("reproducibility")
+        reproducibility_seconds = reproducibility_metric.seconds * 1000 if reproducibility_metric else None
+
         ndjson_args = {
             # summary
             "net_score": float(summary.get("net_score", 0.0)),
@@ -247,7 +250,7 @@ def handle_url(models: Dict[str, List[Optional[str]]]) -> Dict[str, dict]:
             "reviewedness": get_metric("reviewedness"),
             "reviewedness_latency": get_latency("reviewedness"),
             "reproducibility": get_metric("reproducibility"),
-            "reproducibility_latency": get_latency("reproducibility"),
+            "reproducibility_latency": reproducibility_seconds,
             "treescore": get_metric("treescore"),
             "treescore_latency": get_latency("treescore"),
         }
