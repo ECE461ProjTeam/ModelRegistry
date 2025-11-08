@@ -33,7 +33,10 @@ def ArtifactsList():
     
     res = []
     try:
-        data = request.get_json()[0]
+        data_array = request.get_json()
+        if not isinstance(data_array, list) or len(data_array) == 0:
+            raise ValueError("Request must contain at least one artifact query")
+        data = data_array[0]
         name = data.get("name")
         types = data.get("types")
         if name is None or types is None:
