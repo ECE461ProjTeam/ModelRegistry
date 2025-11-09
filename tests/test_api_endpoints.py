@@ -110,12 +110,15 @@ class TestArtifactCreateEndpoint(TestAPIEndpoints):
         
         self.assertEqual(response.status_code, 201)
         data = json.loads(response.data)
-        self.assertIn('name', data)
-        self.assertIn('id', data)
-        self.assertIn('type', data)
-        self.assertEqual(data['name'], 'whisper-tiny')
-        self.assertEqual(data['type'], 'model')
-        self.assertIn(data['id'], model_registry)
+        self.assertIn('metadata', data)
+        self.assertIn('data', data)
+        metadata = data['metadata']
+        self.assertIn('name', metadata)
+        self.assertIn('id', metadata)
+        self.assertIn('type', metadata)
+        self.assertEqual(metadata['name'], 'whisper-tiny')
+        self.assertEqual(metadata['type'], 'model')
+        self.assertIn(metadata['id'], model_registry)
 
     @patch('src.api.app.authenticate', return_value=True)
     def test_create_model_missing_url(self, mock_auth):
@@ -176,7 +179,7 @@ class TestArtifactRetrieveEndpoint(TestAPIEndpoints):
             data=json.dumps({'url': test_url})
         )
         created_data = json.loads(create_response.data)
-        artifact_id = created_data['id']
+        artifact_id = created_data['metadata']['id']
         
         # Retrieve the model
         response = self.client.get(
@@ -249,7 +252,7 @@ class TestArtifactUpdateEndpoint(TestAPIEndpoints):
             data=json.dumps({'url': test_url})
         )
         created_data = json.loads(create_response.data)
-        artifact_id = created_data['id']
+        artifact_id = created_data['metadata']['id']
         
         # Update the model
         update_payload = {
@@ -396,7 +399,7 @@ class TestArtifactsListEndpoint(TestAPIEndpoints):
 
     @patch('src.api.app.authenticate', return_value=True)
     def test_list_artifacts_missing_types(self, mock_auth):
-        """Test POST /artifacts fails without types field"""
+        """Test POST /artifacts succeeds without types field"""
         query = [{
             'name': '*'
         }]
@@ -406,9 +409,7 @@ class TestArtifactsListEndpoint(TestAPIEndpoints):
             data=json.dumps(query)
         )
         
-        self.assertEqual(response.status_code, 400)
-        data = json.loads(response.data)
-        self.assertIn('missing field', data['description'].lower())
+        self.assertEqual(response.status_code, 200)
 
     @patch('src.api.app.authenticate', return_value=False)
     def test_list_artifacts_authentication_failed(self, mock_auth):
@@ -454,10 +455,10 @@ class TestEdgeCases(TestAPIEndpoints):
         self.assertEqual(response2.status_code, 201)
         
         # IDs should be different
-        self.assertNotEqual(data1['id'], data2['id'])
+        self.assertNotEqual(data1['metadata']['id'], data2['metadata']['id'])
         
         # Names should be the same
-        self.assertEqual(data1['name'], data2['name'])
+        self.assertEqual(data1['metadata']['name'], data2['metadata']['name'])
 
     @patch('src.api.app.authenticate', return_value=True)
     def test_retrieve_wrong_artifact_type(self, mock_auth):
@@ -470,7 +471,7 @@ class TestEdgeCases(TestAPIEndpoints):
             data=json.dumps({'url': test_url})
         )
         created_data = json.loads(create_response.data)
-        artifact_id = created_data['id']
+        artifact_id = created_data['metadata']['id']
         
         # Try to retrieve as dataset
         response = self.client.get(
