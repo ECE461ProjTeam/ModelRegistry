@@ -338,10 +338,10 @@ class TestArtifactsListEndpoint(TestAPIEndpoints):
             )
         
         # List all models
-        query = {
+        query = [{
             'name': '*',
             'types': ['model']
-        }
+        }]
         response = self.client.post(
             '/artifacts',
             headers=self.headers,
@@ -364,10 +364,10 @@ class TestArtifactsListEndpoint(TestAPIEndpoints):
         )
         
         # Query for datasets (should return empty)
-        query = {
+        query = [{
             'name': '*',
             'types': ['dataset']
-        }
+        }]
         response = self.client.post(
             '/artifacts',
             headers=self.headers,
@@ -381,9 +381,9 @@ class TestArtifactsListEndpoint(TestAPIEndpoints):
     @patch('src.api.app.authenticate', return_value=True)
     def test_list_artifacts_missing_name(self, mock_auth):
         """Test POST /artifacts fails without name field"""
-        query = {
+        query = [{
             'types': ['model']
-        }
+        }]
         response = self.client.post(
             '/artifacts',
             headers=self.headers,
@@ -397,9 +397,9 @@ class TestArtifactsListEndpoint(TestAPIEndpoints):
     @patch('src.api.app.authenticate', return_value=True)
     def test_list_artifacts_missing_types(self, mock_auth):
         """Test POST /artifacts fails without types field"""
-        query = {
+        query = [{
             'name': '*'
-        }
+        }]
         response = self.client.post(
             '/artifacts',
             headers=self.headers,
@@ -413,10 +413,10 @@ class TestArtifactsListEndpoint(TestAPIEndpoints):
     @patch('src.api.app.authenticate', return_value=False)
     def test_list_artifacts_authentication_failed(self, mock_auth):
         """Test POST /artifacts fails with invalid authentication"""
-        query = {
+        query = [{
             'name': '*',
             'types': ['model']
-        }
+        }]
         response = self.client.post(
             '/artifacts',
             headers=self.headers,
