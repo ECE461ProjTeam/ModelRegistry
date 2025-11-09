@@ -38,8 +38,8 @@ def ArtifactsList():
             raise ValueError("Request must contain at least one artifact query")
         data = data_array[0]
         name = data.get("name")
-        types = data.get("types")
-        if name is None or types is None:
+        types = data.get("types", [])
+        if name is None:
             raise ValueError("Missing fields")
     except Exception as e:
         return jsonify({'description': 'There is missing field(s) in the artifact_query or it is formed improperly, or is invalid.'}), 400
@@ -146,7 +146,7 @@ def ArtifactCreate(artifact_type):
         logger.info(f"Created new {artifact_type} artifact with name: {newArtifact.name}")
         model_registry[newArtifact.id] = newArtifact
         # TODO: need to download the files from the link and store them in S3
-        return jsonify(newArtifact.metadata), 201
+        return jsonify({"metadata": newArtifact.metadata, "data": {"url": newArtifact.url, "download_url": ""}}), 201
     except Exception as e:
         return jsonify({'description': 
             'There is missing field(s) in the artifact_data or it is formed improperly (must include a single url)'}), 400
