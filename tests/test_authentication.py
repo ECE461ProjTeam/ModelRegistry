@@ -72,7 +72,7 @@ class TestAuthenticationEndpoints(unittest.TestCase):
         auth_resp = self.client.put('/authenticate', json=auth_payload)
         self.assertEqual(auth_resp.status_code, 200)
         token = auth_resp.get_json()['token']
-        headers = {"Authorization": f"Bearer {token}"}
+        headers = {"X-Authorization": f"Bearer {token}"}
 
         resp = self.client.get('/profile', headers=headers)
         self.assertEqual(resp.status_code, 200)
@@ -96,7 +96,7 @@ class TestAuthenticationEndpoints(unittest.TestCase):
         auth_resp = self.client.put('/authenticate', json=auth_payload)
         self.assertEqual(auth_resp.status_code, 200)
         token = auth_resp.get_json()['token']
-        headers = {"Authorization": f"Bearer {token}"}
+        headers = {"X-Authorization": f"Bearer {token}"}
 
         payload = {
             "user": {"name": "newuser", "is_admin": False},
@@ -117,7 +117,7 @@ class TestAuthenticationEndpoints(unittest.TestCase):
         auth_resp = self.client.put('/authenticate', json=auth_payload)
         self.assertEqual(auth_resp.status_code, 200)
         token = auth_resp.get_json()['token']
-        headers = {"Authorization": f"Bearer {token}"}
+        headers = {"X-Authorization": f"Bearer {token}"}
 
         payload = {
             "user": {"name": "testcreated", "is_admin": False},
@@ -147,7 +147,7 @@ class TestAuthenticationEndpoints(unittest.TestCase):
         auth_resp = self.client.put('/authenticate', json=auth_payload)
         self.assertEqual(auth_resp.status_code, 200)
         token = auth_resp.get_json()['token']
-        headers = {"Authorization": f"Bearer {token}"}
+        headers = {"X-Authorization": f"Bearer {token}"}
         payload = {"user": {"name": 'tobedeleted'}}
 
         resp = self.client.delete('/profile', headers=headers, json=payload)
@@ -177,7 +177,7 @@ class TestAuthenticationEndpoints(unittest.TestCase):
         auth_resp = self.client.put('/authenticate', json=auth_payload)
         self.assertEqual(auth_resp.status_code, 200)
         token = auth_resp.get_json()['token']
-        headers = {"Authorization": f"Bearer {token}"}
+        headers = {"X-Authorization": f"Bearer {token}"}
         payload = {"user": {"name": 'otheruser'}}
 
         resp = self.client.delete('/profile', headers=headers, json=payload)

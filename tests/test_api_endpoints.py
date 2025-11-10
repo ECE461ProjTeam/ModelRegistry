@@ -13,7 +13,8 @@ load_dotenv()
 sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), '..')))
 
 from src.api.app import app, model_registry
-from src.api.models import User
+from src.api.models import User, TokenUsage
+from flask_jwt_extended import get_jti
 from src.api.extensions import db
 
 
@@ -143,12 +144,15 @@ class TestArtifactCreateEndpoint(TestAPIEndpoints):
         
         self.assertEqual(response.status_code, 201)
         data = json.loads(response.data)
-        self.assertIn('name', data)
-        self.assertIn('id', data)
-        self.assertIn('type', data)
-        self.assertEqual(data['name'], 'whisper-tiny')
-        self.assertEqual(data['type'], 'model')
-        self.assertIn(data['id'], model_registry)
+        self.assertIn('metadata', data)
+        self.assertIn('data', data)
+        metadata = data['metadata']
+        self.assertIn('name', metadata)
+        self.assertIn('id', metadata)
+        self.assertIn('type', metadata)
+        self.assertEqual(metadata['name'], 'whisper-tiny')
+        self.assertEqual(metadata['type'], 'model')
+        self.assertIn(metadata['id'], model_registry)
 
     def test_create_model_missing_url(self):
         """Test POST /artifact/model fails without url"""
@@ -206,7 +210,7 @@ class TestArtifactRetrieveEndpoint(TestAPIEndpoints):
             data=json.dumps({'url': test_url})
         )
         created_data = json.loads(create_response.data)
-        artifact_id = created_data['id']
+        artifact_id = created_data['metadata']['id']
         
         # Retrieve the model
         response = self.client.get(
@@ -272,7 +276,7 @@ class TestArtifactUpdateEndpoint(TestAPIEndpoints):
             data=json.dumps({'url': test_url})
         )
         created_data = json.loads(create_response.data)
-        artifact_id = created_data['id']
+        artifact_id = created_data['metadata']['id']
         
         # Update the model
         update_payload = {
@@ -353,10 +357,10 @@ class TestArtifactsListEndpoint(TestAPIEndpoints):
             )
         
         # List all models
-        query = {
+        query = [{
             'name': '*',
             'types': ['model']
-        }
+        }]
         response = self.client.post(
             '/artifacts',
             headers=self.headers,
@@ -378,10 +382,10 @@ class TestArtifactsListEndpoint(TestAPIEndpoints):
         )
         
         # Query for datasets (should return empty)
-        query = {
+        query = [{
             'name': '*',
             'types': ['dataset']
-        }
+        }]
         response = self.client.post(
             '/artifacts',
             headers=self.headers,
@@ -394,9 +398,9 @@ class TestArtifactsListEndpoint(TestAPIEndpoints):
 
     def test_list_artifacts_missing_name(self):
         """Test POST /artifacts fails without name field"""
-        query = {
+        query = [{
             'types': ['model']
-        }
+        }]
         response = self.client.post(
             '/artifacts',
             headers=self.headers,
@@ -418,19 +422,37 @@ class TestArtifactsListEndpoint(TestAPIEndpoints):
             data=json.dumps(query)
         )
         
-        self.assertEqual(response.status_code, 400)
-        data = json.loads(response.data)
-        self.assertIn('missing field', data.get('message', '').lower())
+        self.assertEqual(response.status_code, 200)
 
     def test_list_artifacts_authentication_failed(self):
         """Test POST /artifacts fails with invalid authentication"""
-        query = {
+        query = [{
             'name': '*',
             'types': ['model']
-        }
-        # call without auth to simulate missing token
-        response = self.client.post('/artifacts', data=json.dumps(query))
-        self.assertEqual(response.status_code, 401)
+        }]
+        # Simulate an otherwise-valid JWT but missing TokenUsage record so
+        # the application treats the token as unknown (should return 403).
+        auth_resp = self.client.put('/authenticate', json={
+            'user': {'name': os.environ.get("DEFAULT_USER")},
+            'secret': {'password': os.environ.get("DEFAULT_PASSWORD")}
+        })
+        self.assertEqual(auth_resp.status_code, 200)
+        token = auth_resp.get_json()['token']
+        headers = {'X-Authorization': f'Bearer {token}', 'Content-Type': 'application/json'}
+
+        # Remove the TokenUsage row for this token so the token is valid JWT but unknown to the app
+        jti = get_jti(encoded_token=token)
+        with self.app.app_context():
+            TokenUsage.query.filter_by(jti=jti).delete()
+            db.session.commit()
+
+        response = self.client.post(
+            '/artifacts',
+            headers=headers,
+            data=json.dumps(query)
+        )
+
+        self.assertEqual(response.status_code, 403)
 
 
 class TestEdgeCases(TestAPIEndpoints):
@@ -460,10 +482,10 @@ class TestEdgeCases(TestAPIEndpoints):
         self.assertEqual(response2.status_code, 201)
         
         # IDs should be different
-        self.assertNotEqual(data1['id'], data2['id'])
+        self.assertNotEqual(data1['metadata']['id'], data2['metadata']['id'])
         
         # Names should be the same
-        self.assertEqual(data1['name'], data2['name'])
+        self.assertEqual(data1['metadata']['name'], data2['metadata']['name'])
 
     def test_retrieve_wrong_artifact_type(self):
         """Test retrieving with wrong artifact type returns 404"""
@@ -475,7 +497,7 @@ class TestEdgeCases(TestAPIEndpoints):
             data=json.dumps({'url': test_url})
         )
         created_data = json.loads(create_response.data)
-        artifact_id = created_data['id']
+        artifact_id = created_data['metadata']['id']
         
         # Try to retrieve as dataset
         response = self.client.get(

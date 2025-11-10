@@ -18,6 +18,10 @@ class Config:
     # Authentication settings
     TOKEN_EXPIRE_SECONDS = os.environ.get("TOKEN_EXPIRE_SECONDS")
     MAX_REQUESTS_PER_TOKEN = os.environ.get("MAX_REQUESTS_PER_TOKEN")
+    # Per OpenAPI spec this project uses X-Authorization for the token header.
+    # Configure flask-jwt-extended to read the token from X-Authorization only.
+    JWT_HEADER_NAME = "X-Authorization"
+    JWT_HEADER_TYPE = "Bearer"
 
 
 class TestConfig(Config):
@@ -30,3 +34,7 @@ class TestConfig(Config):
     # Shorten token expiry and request limits for testing
     TOKEN_EXPIRE_SECONDS = os.environ.get("TEST_TOKEN_EXPIRE_SECONDS", 600)
     MAX_REQUESTS_PER_TOKEN = os.environ.get("TEST_MAX_REQUESTS_PER_TOKEN", 10)
+    
+    # Tests should also use X-Authorization header
+    JWT_HEADER_NAME = "X-Authorization"
+    JWT_HEADER_TYPE = "Bearer"

@@ -148,14 +148,24 @@ def ArtifactsList():
     """
     res = []
     try:
-        data = request.get_json()
+        data_array = request.get_json()
+        # Accept either a single artifact_query (dict) or a list containing queries
+        if isinstance(data_array, dict):
+            data_array = [data_array]
+        if not isinstance(data_array, list) or len(data_array) == 0:
+            raise ValueError("Request must contain at least one artifact query")
+
+        data = data_array[0]
         name = data.get("name")
-        types = data.get("types")
-        if name is None or types is None:
+        types = data.get("types", [])
+        if name is None:
             raise ValueError("Missing fields")
     except Exception as e:
         return jsonify({'message': 'There is missing field(s) in the artifact_query or it is formed improperly, or is invalid.'}), 400
-    
+
+    if len(types) == 0:
+        types = ["model", "dataset", "code"]
+
     for model in model_registry.values():
         if model.type in types:
             res.append(model.metadata)
@@ -168,6 +178,12 @@ def ArtifactsList():
 @jwt_required()
 def RegistryReset():
     """Reset the registry to a system default state."""
+    # Only admins may reset the registry
+    claims = get_jwt()
+    is_admin = claims.get('is_admin', False)
+    if not is_admin:
+        return jsonify({'message': 'You do not have permission to reset the registry.'}), 401
+
     logger.info("Resetting the model registry to default state.")
     model_registry.clear()
 
@@ -246,7 +262,7 @@ def ArtifactCreate(artifact_type):
         logger.info(f"Created new {artifact_type} artifact with name: {newArtifact.name}")
         model_registry[newArtifact.id] = newArtifact
         # TODO: need to download the files from the link and store them in S3
-        return jsonify(newArtifact.metadata), 201
+        return jsonify({"metadata": newArtifact.metadata, "data": {"url": newArtifact.url, "download_url": ""}}), 201
     except Exception as e:
         return jsonify({'message': 'There is missing field(s) in the artifact_data or it is formed improperly (must include a single url)'}), 400
 

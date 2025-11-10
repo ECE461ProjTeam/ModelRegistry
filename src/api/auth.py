@@ -186,19 +186,7 @@ def delete_profile():
         400 Bad Request: If any required field is missing or invalid.
         403 Forbidden: If the current user is not authorized to delete the specified profile.
     """
-    # Check if current user is authorized to delete the profile
-    request_user = get_jwt_identity()
-    
-    # Verify admin permissions
-    claims = get_jwt()  # dict with additional_claims
-    is_admin = claims.get("is_admin", False)
-
-    # Allow deletion if the requester is the owner OR an admin.
-    # Deny only when the requester is neither the owner nor an admin.
-    if request_user != user.get("name") and not is_admin:
-        return jsonify({'error': 'Not authorized to delete this profile.'}), 403
-    
-    # Check if request is JSON
+    # Ensure request is JSON and extract payload first
     if not request or not request.is_json:
         return jsonify({'error': 'Invalid request format.'}), 400
 
@@ -208,12 +196,29 @@ def delete_profile():
     # Validate presence of required fields
     if not user or "name" not in user:
         return jsonify({'error': 'Missing required fields in request.'}), 400
+
+    # Check if current user is authorized to delete the profile
+    request_user = get_jwt_identity()
+    # Verify admin permissions
+    claims = get_jwt()  # dict with additional_claims
+    is_admin = claims.get("is_admin", False)
+
+    # Allow deletion if the requester is the owner OR an admin.
+    # Deny only when the requester is neither the owner nor an admin.
+    if request_user != user.get("name") and not is_admin:
+        return jsonify({'error': 'Not authorized to delete this profile.'}), 403
     
     # Fetch user to be deleted
     fetch_user = User.query.filter_by(name=user["name"]).first()
     if not fetch_user:
         return jsonify({'error': 'User not found.'}), 400
     
+    # Delete any token usage records for this user to avoid FK constraint
+    try:
+        db.session.query(TokenUsage).filter_by(user_id=fetch_user.id).delete()
+    except Exception:
+        db.session.rollback()
+
     # Delete user profile
     db.session.delete(fetch_user)
     db.session.commit()
@@ -235,12 +240,23 @@ def get_profile():
     fetch_user = User.query.filter_by(name=current_user).first()
     if not fetch_user:
         return jsonify({'message': 'User not found.'}), 400
-    
+
+    # Include request_count for the current token (if tracked)
+    claims = get_jwt()
+    jti = claims.get('jti')
+    request_count = 0
+    if jti:
+        token_record = TokenUsage.query.filter_by(jti=jti).first()
+        if token_record:
+            request_count = token_record.usage_count
+
     user_profile = {
         "name": fetch_user.name,
         "is_admin": fetch_user.is_admin,
+        "permissions": fetch_user.permissions,
+        "request_count": request_count,
     }
-    
+
     return jsonify({'profile': user_profile}), 200
 
 
