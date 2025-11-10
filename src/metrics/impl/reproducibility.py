@@ -101,7 +101,6 @@ class ReproducibilityMetric:
         start = time.time()
         
         # Placeholder logic
-        github_data = context.get("github", {})
 
         # logger.debug(f"context keys: {context.keys()}")
 
