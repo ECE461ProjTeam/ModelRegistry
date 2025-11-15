@@ -7,12 +7,27 @@ the environment when available.
 """
 
 import os
+import json
 
 class Config:
     # Secret keys (used for signing JWTs and Flask sessions)
     SECRET_KEY = os.environ.get("SECRET_KEY")
     JWT_SECRET_KEY = os.environ.get("JWT_SECRET_KEY")
-    SQLALCHEMY_DATABASE_URI = os.environ.get("DATABASE_URL") 
+
+    # Elastic Beanstalk Env has DATABASE_INFO from Secret Manager
+    db_info_str = os.environ.get("DATABASE_INFO", "")
+    # Load database info from environment variable string
+    db_info = json.loads(db_info_str) if db_info_str else {}
+
+    if db_info == {}:
+        # Error if no DB info found
+        raise ValueError("Database configuration not found in environment.")
+    
+    SQLALCHEMY_DATABASE_URI = (
+        f"postgresql+psycopg2://{db_info['username']}:{db_info['password']}"
+        f"@{db_info['host']}:{db_info['port']}/{db_info['dbname']}"
+    )
+
     SQLALCHEMY_TRACK_MODIFICATIONS = False # to suppress warnings
 
     # Authentication settings
