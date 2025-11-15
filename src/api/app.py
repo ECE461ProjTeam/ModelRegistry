@@ -1,13 +1,130 @@
+"""Flask application and API route definitions.
+
+This module creates the Flask `app` instance used by the service,
+registers blueprints, initializes extensions and defines the HTTP
+routes that make up the Model Registry API. The top-level variable
+``app`` is intentionally exported here and re-exported by the
+project-level ``application.py`` so WSGI servers (and deployment
+platforms like Elastic Beanstalk) can discover the callable.
+"""
+
 from flask import Flask, jsonify, request
+from flask_jwt_extended import jwt_required, get_jwt
 from .classes import *
 from src.logger import get_logger
-from .auth import authenticate, getPermissionLevel
+from .auth import auth_bp, create_default_admin
+from .models import User, TokenUsage
+from .config import Config, TestConfig
+from .extensions import init_extensions, db
+from datetime import datetime, timezone
+from dotenv import load_dotenv
+import os
+import threading
+import time
+
+load_dotenv()
+
 logger = get_logger("api.app")
+
+
 
 plannedTracks = ["Access control track"]
 model_registry = {}
 
 app = Flask(__name__)
+
+if os.environ.get("DEBUG", "False") == "True":
+    app.config.from_object(TestConfig)
+else:
+    app.config.from_object(Config)
+
+init_extensions(app)
+
+with app.app_context():
+    db.create_all()
+    # Delete the old admin if it exists
+    admin_user = User.query.filter_by(name=os.environ.get("DEFAULT_USER")).first()
+    if not admin_user:
+        create_default_admin()
+
+app.register_blueprint(auth_bp)
+
+
+# Background cleanup thread to remove expired TokenUsage records.
+def _cleanup_expired_tokens_loop(interval_seconds: int = None):
+    """Daemon loop that periodically deletes expired token records.
+
+    Runs inside an application context so SQLAlchemy sessions work.
+    Uses `CLEANUP_INTERVAL_SECONDS` env var if present, otherwise defaults
+    to 600 seconds (10 mins).
+    """
+    if interval_seconds is None:
+        try:
+            interval_seconds = int(os.environ.get("CLEANUP_INTERVAL_SECONDS", "600"))
+        except Exception:
+            interval_seconds = 60
+
+    # Use the app context for DB access
+    with app.app_context():
+        while True:
+            try:
+                now = datetime.now(timezone.utc)
+
+                # Delete tokens that are time-expired
+                expired_tokens = TokenUsage.query.filter(TokenUsage.expires_at <= now).all()
+                for t in expired_tokens:
+                    db.session.delete(t)
+
+                # Also delete tokens that exceeded usage limits (cleanup safety)
+                if os.environ.get("DEBUG", "False") == "True":
+                    max_requests = TestConfig.MAX_REQUESTS_PER_TOKEN
+                else:
+                    max_requests = Config.MAX_REQUESTS_PER_TOKEN
+
+                overused = TokenUsage.query.filter(TokenUsage.usage_count >= max_requests).all()
+                for t in overused:
+                    db.session.delete(t)
+
+                if expired_tokens or overused:
+                    db.session.commit()
+            except Exception as e:
+                # If cleanup fails, rollback and continue; don't crash the thread.
+                try:
+                    db.session.rollback()
+                except Exception:
+                    pass
+                logger.exception("Error during token cleanup: %s", e)
+
+            time.sleep(interval_seconds)
+
+
+# Start the cleanup thread as a daemon so it won't prevent shutdown.
+try:
+    cleanup_thread = threading.Thread(target=_cleanup_expired_tokens_loop, daemon=True, name="token-cleanup-thread")
+    cleanup_thread.start()
+except Exception:
+    logger.exception("Failed to start token cleanup thread")
+
+
+@app.before_request
+@jwt_required(optional=True)
+def enforce_request_limit():
+    jwt_data = get_jwt()
+    if not jwt_data:
+        return  # no token (public route)
+
+    jti = jwt_data["jti"]
+    token = TokenUsage.query.filter_by(jti=jti).first()
+
+    if not token:
+        return jsonify({"error": "Invalid or unknown token"}), 403
+
+    if token.is_expired:
+        db.session.delete(token)
+        db.session.commit()
+        return jsonify({"msg": "Token expired after max requests"}), 403
+
+    token.increment_usage()
 
 @app.route('/', methods=['GET'])
 def index():
@@ -17,9 +134,11 @@ def index():
 @app.route('/health', methods=['GET'])
 def health():
     """Health check route."""
-    return jsonify({'description': 'Service reachable.'}), 200
+    return jsonify({'message': 'Service reachable.'}), 200
+
 
 @app.route('/artifacts', methods=['POST'])
+@jwt_required()
 def ArtifactsList():
     """Get any artifacts fitting the query. Search for artifacts satisfying the indicated query.
 
@@ -27,22 +146,22 @@ def ArtifactsList():
     The response is paginated; the response header includes the offset to use in the next query.
 
     """
-    
-    if not authenticate():
-        return jsonify({'description': 'Authentication failed due to invalid or missing AuthenticationToken.'}), 403
-    
     res = []
     try:
         data_array = request.get_json()
+        # Accept either a single artifact_query (dict) or a list containing queries
+        if isinstance(data_array, dict):
+            data_array = [data_array]
         if not isinstance(data_array, list) or len(data_array) == 0:
             raise ValueError("Request must contain at least one artifact query")
+
         data = data_array[0]
         name = data.get("name")
         types = data.get("types", [])
         if name is None:
             raise ValueError("Missing fields")
     except Exception as e:
-        return jsonify({'description': 'There is missing field(s) in the artifact_query or it is formed improperly, or is invalid.'}), 400
+        return jsonify({'message': 'There is missing field(s) in the artifact_query or it is formed improperly, or is invalid.'}), 400
 
     if len(types) == 0:
         types = ["model", "dataset", "code"]
@@ -56,32 +175,30 @@ def ArtifactsList():
 
 
 @app.route('/reset', methods=['DELETE'])
+@jwt_required()
 def RegistryReset():
     """Reset the registry to a system default state."""
-    
-    if not authenticate():
-        return jsonify({'description': 'Authentication failed due to invalid or missing AuthenticationToken.'}), 403
-    
-    if getPermissionLevel() != "admin":
-        return jsonify({'description': 'You do not have permission to reset the registry.'}), 401
-    
+    # Only admins may reset the registry
+    claims = get_jwt()
+    is_admin = claims.get('is_admin', False)
+    if not is_admin:
+        return jsonify({'message': 'You do not have permission to reset the registry.'}), 401
+
     logger.info("Resetting the model registry to default state.")
     model_registry.clear()
-    return jsonify({'description': 'Registry is reset.'}), 200
+
+    return jsonify({'message': 'Registry is reset.'}), 200
 
 
 @app.route('/artifacts/<artifact_type>/<id>', methods=['GET'])
+@jwt_required()
 def ArtifactRetrieve(artifact_type, id):
     """Return this artifact."""
-    
-    if not authenticate():
-        return jsonify({'description': 'Authentication failed due to invalid or missing AuthenticationToken.'}), 403
-    
     if artifact_type not in ["model", "dataset", "code"] or not id.isdigit():
-        return jsonify({'description': 'There is missing field(s) in the artifact_type or artifact_id or it is formed improperly, or is invalid.'}), 400
+        return jsonify({'message': 'There is missing field(s) in the artifact_type or artifact_id or it is formed improperly, or is invalid.'}), 400
 
     if id not in model_registry:
-        return jsonify({'description': 'Artifact does not exist.'}), 404
+        return jsonify({'message': 'Artifact does not exist.'}), 404
     try:
         model = model_registry[id]
         if model.type == artifact_type:
@@ -89,18 +206,15 @@ def ArtifactRetrieve(artifact_type, id):
     except Exception as e:
         pass
 
-    return jsonify({'description': 'Artifact does not exist.'}), 404
+    return jsonify({'message': 'Artifact does not exist.'}), 404
 
 
 @app.route('/artifacts/<artifact_type>/<id>', methods=['PUT'])
+@jwt_required()
 def ArtifactUpdate(artifact_type, id):
     """The name, version, and id must match. The artifact source (from artifact_data) will replace the previous contents."""
-    
-    if not authenticate():
-        return jsonify({'description': 'Authentication failed due to invalid or missing AuthenticationToken.'}), 403
-    
     if artifact_type not in ["model", "dataset", "code"] or not id.isdigit():
-        return jsonify({'description': 'There is missing field(s) in the artifact_type or artifact_id or it is formed improperly, or is invalid.'}), 400
+        return jsonify({'message': 'There is missing field(s) in the artifact_type or artifact_id or it is formed improperly, or is invalid.'}), 400
     
     try:
         req_data = request.get_json()
@@ -111,22 +225,24 @@ def ArtifactUpdate(artifact_type, id):
         if model.type == artifact_type and model.id == id:
             model_registry[id].metadata.update(metadata)
             model_registry[id].url = upd_data.get("url")
-            return jsonify({'description': 'Artifact is updated.'}), 200
+            return jsonify({'message': 'Artifact is updated.'}), 200
     except Exception as e:
         pass
         #TODO: return code on wrong request body
         #TODO: update S3 files if url is changed
 
-    return jsonify({'description': 'Artifact does not exist.'}), 404
+    return jsonify({'message': 'Artifact does not exist.'}), 404
 
 # NON-BASELINE
 @app.route('/artifacts/<artifact_type>/<id>', methods=['DELETE'])
+@jwt_required()
 def ArtifactDelete(artifact_type, id):
-    """Delete only the artifact that matches 'id'. (id is a unique identifier for an artifact)."""
+    """Delete only the artifact that matches 'id'. (id is a unique identifier for an artifact)."""    
     return jsonify({'message': 'Not implemented'}), 501
 
 
 @app.route('/artifact/<artifact_type>', methods=['POST'])
+@jwt_required()
 def ArtifactCreate(artifact_type):
     """Register a new artifact by providing a downloadable source URL. Artifacts may share a name with existing entries if their version differs.
     Refer to the description above to see how an id is formed for an artifact.
@@ -142,67 +258,66 @@ def ArtifactCreate(artifact_type):
         elif artifact_type == "code":
             newArtifact = Code(url)
         else:
-            return jsonify({'description': 'Invalid artifact_type.'}), 400
+            return jsonify({'message': 'Invalid artifact_type.'}), 400
         logger.info(f"Created new {artifact_type} artifact with name: {newArtifact.name}")
         model_registry[newArtifact.id] = newArtifact
         # TODO: need to download the files from the link and store them in S3
         return jsonify({"metadata": newArtifact.metadata, "data": {"url": newArtifact.url, "download_url": ""}}), 201
     except Exception as e:
-        return jsonify({'description': 
-            'There is missing field(s) in the artifact_data or it is formed improperly (must include a single url)'}), 400
+        return jsonify({'message': 'There is missing field(s) in the artifact_data or it is formed improperly (must include a single url)'}), 400
 
 
 @app.route('/artifact/model/<id>/rate', methods=['GET'])
+@jwt_required()
 def ModelArtifactRate(id):
     """Get ratings for this model artifact. (BASELINE)."""
-    
-    
     return jsonify({'message': 'Not implemented'}), 501
 
 
 @app.route('/artifact/<artifact_type>/<id>/cost', methods=['GET'])
+@jwt_required()
 def get_artifact_artifact_type_id_cost(artifact_type, id):
     """Get the cost of an artifact (BASELINE)."""
     return jsonify({'message': 'Not implemented'}), 501
 
 
-@app.route('/authenticate', methods=['PUT'])
-def CreateAuthToken():
-    """Create an access token."""
-    return jsonify({'message': 'Not implemented'}), 501
-
-
 @app.route('/artifact/byName/<name>', methods=['GET'])
+@jwt_required()
 def ArtifactByNameGet(name):
     """Return metadata for each version matching this artifact name."""
     return jsonify({'message': 'Not implemented'}), 501
 
 
 @app.route('/artifact/<artifact_type>/<id>/audit', methods=['GET'])
+@jwt_required()
 def ArtifactAuditGet(artifact_type, id):
     """No description provided."""
     return jsonify({'message': 'Not implemented'}), 501
 
 
 @app.route('/artifact/model/<id>/lineage', methods=['GET'])
+@jwt_required()
 def ArtifactLineageGet(id):
     """No description provided."""
     return jsonify({'message': 'Not implemented'}), 501
 
 
 @app.route('/artifact/model/<id>/license-check', methods=['POST'])
+@jwt_required()
 def ArtifactLicenseCheck(id):
     """No description provided."""
     return jsonify({'message': 'Not implemented'}), 501
 
 
 @app.route('/artifact/byRegEx', methods=['POST'])
+@jwt_required()
 def ArtifactByRegExGet():
     """No description provided."""
     return jsonify({'message': 'Not implemented'}), 501
 
 
 @app.route('/tracks', methods=['GET'])
+@jwt_required()
 def get_tracks():
     """No description provided."""
     try:
@@ -212,4 +327,12 @@ def get_tracks():
 
 
 def run_api():
-    app.run(host='0.0.0.0', port=5000, debug=True)
+    app.run(
+        host='0.0.0.0',
+        port=int(os.environ.get("PORT", 5000)),
+        debug=os.environ.get("DEBUG", "False") == "True"
+    )
+
+
+if __name__ == '__main__':
+    run_api() # For local testing only

@@ -6,11 +6,16 @@ Tests are based on the ECE 461 Fall 2025 OpenAPI specification.
 import unittest
 import json
 import sys
-from unittest.mock import patch, MagicMock
 import os
+from dotenv import load_dotenv
+load_dotenv()
+
 sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), '..')))
 
 from src.api.app import app, model_registry
+from src.api.models import User, TokenUsage
+from flask_jwt_extended import get_jti
+from src.api.extensions import db
 
 
 class TestAPIEndpoints(unittest.TestCase):
@@ -22,9 +27,25 @@ class TestAPIEndpoints(unittest.TestCase):
         self.client = self.app.test_client()
         self.app.testing = True
         model_registry.clear()
-        
-        # Mock authentication token
-        self.auth_token = "bearer eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9"
+        # Push app context so authenticate endpoint and JWT machinery work
+        self._ctx = self.app.app_context()
+        self._ctx.push()
+
+        # Obtain a real token by calling the authenticate endpoint with the
+        # default admin credentials created on app startup. Place it into the
+        # X-Authorization header to maintain existing tests that use that
+        # header.
+        auth_resp = self.client.put('/authenticate', json={
+            'user': {'name': os.environ.get("DEFAULT_USER")},
+            'secret': {'password': os.environ.get("DEFAULT_PASSWORD")}
+        })
+        if auth_resp.status_code == 200:
+            token = auth_resp.get_json().get('token')
+            self.auth_token = f"Bearer {token}"
+        else:
+            # Fallback to empty token so tests still run and will fail meaningfully
+            self.auth_token = ''
+
         self.headers = {
             'X-Authorization': self.auth_token,
             'Content-Type': 'application/json'
@@ -33,6 +54,12 @@ class TestAPIEndpoints(unittest.TestCase):
     def tearDown(self):
         """Clean up after each test"""
         model_registry.clear()
+        # pop the app context pushed in setUp
+        try:
+            self._ctx.pop()
+        except Exception:
+            # Ignore exceptions during context pop in teardown to avoid masking test failures.
+            pass
 
 
 class TestTracksEndpoint(TestAPIEndpoints):
@@ -40,7 +67,7 @@ class TestTracksEndpoint(TestAPIEndpoints):
 
     def test_get_tracks_success(self):
         """Test GET /tracks returns planned tracks"""
-        response = self.client.get('/tracks')
+        response = self.client.get('/tracks', headers=self.headers)
         
         self.assertEqual(response.status_code, 200)
         data = json.loads(response.data)
@@ -51,10 +78,7 @@ class TestTracksEndpoint(TestAPIEndpoints):
 
 class TestRegistryResetEndpoint(TestAPIEndpoints):
     """Test /reset endpoint"""
-
-    @patch('src.api.app.authenticate', return_value=True)
-    @patch('src.api.app.getPermissionLevel', return_value='admin')
-    def test_reset_success_as_admin(self, mock_perm, mock_auth):
+    def test_reset_success_as_admin(self):
         """Test DELETE /reset successfully resets registry as admin"""
         # Add a model to registry first
         test_url = "https://huggingface.co/openai/whisper-tiny"
@@ -70,34 +94,44 @@ class TestRegistryResetEndpoint(TestAPIEndpoints):
         
         self.assertEqual(response.status_code, 200)
         data = json.loads(response.data)
-        self.assertEqual(data['description'], 'Registry is reset.')
+        # app returns 'message' key for success responses
+        self.assertEqual(data.get('message'), 'Registry is reset.')
         self.assertEqual(len(model_registry), 0)
 
-    @patch('src.api.app.authenticate', return_value=True)
-    @patch('src.api.app.getPermissionLevel', return_value='user')
-    def test_reset_unauthorized(self, mock_perm, mock_auth):
+    def test_reset_unauthorized(self):
         """Test DELETE /reset fails for non-admin user"""
-        response = self.client.delete('/reset', headers=self.headers)
-        
+        # create a non-admin user and obtain a token for them
+        with self.app.app_context():
+            u = User(name='regular', is_admin=False)
+            u.set_password('pw')
+            db.session.add(u)
+            db.session.commit()
+
+        auth_resp = self.client.put('/authenticate', json={
+            'user': {'name': 'regular'}, 'secret': {'password': 'pw'}
+        })
+        self.assertEqual(auth_resp.status_code, 200)
+        token = auth_resp.get_json()['token']
+        headers = {'X-Authorization': f'Bearer {token}', 'Content-Type': 'application/json'}
+
+        response = self.client.delete('/reset', headers=headers)
+
         self.assertEqual(response.status_code, 401)
         data = json.loads(response.data)
-        self.assertEqual(data['description'], 'You do not have permission to reset the registry.')
+        self.assertEqual(data.get('message'), 'You do not have permission to reset the registry.')
 
-    @patch('src.api.app.authenticate', return_value=False)
-    def test_reset_authentication_failed(self, mock_auth):
+    def test_reset_authentication_failed(self):
         """Test DELETE /reset fails with invalid authentication"""
-        response = self.client.delete('/reset', headers=self.headers)
-        
-        self.assertEqual(response.status_code, 403)
-        data = json.loads(response.data)
-        self.assertEqual(data['description'], 'Authentication failed due to invalid or missing AuthenticationToken.')
+        # call without a token to simulate unauthenticated request
+        response = self.client.delete('/reset')
+        # Flask-JWT-Extended responds with 401 for missing credentials
+        self.assertEqual(response.status_code, 401)
 
 
 class TestArtifactCreateEndpoint(TestAPIEndpoints):
     """Test /artifact/{artifact_type} POST endpoint"""
 
-    @patch('src.api.app.authenticate', return_value=True)
-    def test_create_model_success(self, mock_auth):
+    def test_create_model_success(self):
         """Test POST /artifact/model creates a new model artifact"""
         test_url = "https://huggingface.co/openai/whisper-tiny"
         payload = {'url': test_url}
@@ -120,8 +154,7 @@ class TestArtifactCreateEndpoint(TestAPIEndpoints):
         self.assertEqual(metadata['type'], 'model')
         self.assertIn(metadata['id'], model_registry)
 
-    @patch('src.api.app.authenticate', return_value=True)
-    def test_create_model_missing_url(self, mock_auth):
+    def test_create_model_missing_url(self):
         """Test POST /artifact/model fails without url"""
         payload = {}
         
@@ -133,11 +166,10 @@ class TestArtifactCreateEndpoint(TestAPIEndpoints):
         
         self.assertEqual(response.status_code, 400)
         data = json.loads(response.data)
-        self.assertIn('description', data)
-        self.assertIn('missing field', data['description'].lower())
+        # app returns error under 'message'
+        self.assertIn('missing field', data.get('message', '').lower())
 
-    @patch('src.api.app.authenticate', return_value=True)
-    def test_create_model_invalid_url(self, mock_auth):
+    def test_create_model_invalid_url(self):
         """Test POST /artifact/model fails with invalid url format"""
         payload = {'url': 'not-a-valid-huggingface-url'}
         
@@ -149,7 +181,7 @@ class TestArtifactCreateEndpoint(TestAPIEndpoints):
         
         self.assertEqual(response.status_code, 400)
         data = json.loads(response.data)
-        self.assertIn('description', data)
+        self.assertIn('message', data)
 
     # @patch('src.api.app.authenticate', return_value=False)
     # def test_create_model_authentication_failed(self, mock_auth):
@@ -168,8 +200,7 @@ class TestArtifactCreateEndpoint(TestAPIEndpoints):
 class TestArtifactRetrieveEndpoint(TestAPIEndpoints):
     """Test /artifacts/{artifact_type}/{id} GET endpoint"""
 
-    @patch('src.api.app.authenticate', return_value=True)
-    def test_retrieve_model_success(self, mock_auth):
+    def test_retrieve_model_success(self):
         """Test GET /artifacts/model/{id} retrieves existing model"""
         # Create a model first
         test_url = "https://huggingface.co/openai/whisper-tiny"
@@ -193,8 +224,7 @@ class TestArtifactRetrieveEndpoint(TestAPIEndpoints):
         self.assertEqual(data['id'], artifact_id)
         self.assertEqual(data['type'], 'model')
 
-    @patch('src.api.app.authenticate', return_value=True)
-    def test_retrieve_model_not_found(self, mock_auth):
+    def test_retrieve_model_not_found(self):
         """Test GET /artifacts/model/{id} returns 404 for non-existent model"""
         response = self.client.get(
             '/artifacts/model/999999999',
@@ -203,10 +233,9 @@ class TestArtifactRetrieveEndpoint(TestAPIEndpoints):
         
         self.assertEqual(response.status_code, 404)
         data = json.loads(response.data)
-        self.assertEqual(data['description'], 'Artifact does not exist.')
+        self.assertEqual(data.get('message'), 'Artifact does not exist.')
 
-    @patch('src.api.app.authenticate', return_value=True)
-    def test_retrieve_invalid_artifact_type(self, mock_auth):
+    def test_retrieve_invalid_artifact_type(self):
         """Test GET /artifacts/{invalid_type}/{id} returns 400"""
         response = self.client.get(
             '/artifacts/invalid_type/123',
@@ -215,10 +244,9 @@ class TestArtifactRetrieveEndpoint(TestAPIEndpoints):
         
         self.assertEqual(response.status_code, 400)
         data = json.loads(response.data)
-        self.assertIn('missing field', data['description'].lower())
+        self.assertIn('missing field', data.get('message', '').lower())
 
-    @patch('src.api.app.authenticate', return_value=True)
-    def test_retrieve_invalid_id_format(self, mock_auth):
+    def test_retrieve_invalid_id_format(self):
         """Test GET /artifacts/model/{invalid_id} returns 400"""
         response = self.client.get(
             '/artifacts/model/not-a-number',
@@ -227,22 +255,18 @@ class TestArtifactRetrieveEndpoint(TestAPIEndpoints):
         
         self.assertEqual(response.status_code, 400)
 
-    @patch('src.api.app.authenticate', return_value=False)
-    def test_retrieve_authentication_failed(self, mock_auth):
+    def test_retrieve_authentication_failed(self):
         """Test GET /artifacts/model/{id} fails with invalid authentication"""
-        response = self.client.get(
-            '/artifacts/model/123',
-            headers=self.headers
-        )
-        
-        self.assertEqual(response.status_code, 403)
+        # call without headers to simulate missing authentication
+        response = self.client.get('/artifacts/model/123')
+        # missing JWT -> 401
+        self.assertEqual(response.status_code, 401)
 
 
 class TestArtifactUpdateEndpoint(TestAPIEndpoints):
     """Test /artifacts/{artifact_type}/{id} PUT endpoint"""
 
-    @patch('src.api.app.authenticate', return_value=True)
-    def test_update_model_success(self, mock_auth):
+    def test_update_model_success(self):
         """Test PUT /artifacts/model/{id} updates existing model"""
         # Create a model first
         test_url = "https://huggingface.co/openai/whisper-tiny"
@@ -267,14 +291,13 @@ class TestArtifactUpdateEndpoint(TestAPIEndpoints):
         
         self.assertEqual(response.status_code, 200)
         data = json.loads(response.data)
-        self.assertEqual(data['description'], 'Artifact is updated.')
+        self.assertEqual(data.get('message'), 'Artifact is updated.')
         
         # Verify the update
         self.assertEqual(model_registry[artifact_id].metadata['custom_field'], 'updated_value')
         self.assertEqual(model_registry[artifact_id].url, 'https://huggingface.co/openai/whisper-tiny/tree/v2')
 
-    @patch('src.api.app.authenticate', return_value=True)
-    def test_update_model_not_found(self, mock_auth):
+    def test_update_model_not_found(self):
         """Test PUT /artifacts/model/{id} returns 404 for non-existent model"""
         update_payload = {
             'metadata': {'name': 'test'},
@@ -288,10 +311,9 @@ class TestArtifactUpdateEndpoint(TestAPIEndpoints):
         
         self.assertEqual(response.status_code, 404)
         data = json.loads(response.data)
-        self.assertEqual(data['description'], 'Artifact does not exist.')
+        self.assertEqual(data.get('message'), 'Artifact does not exist.')
 
-    @patch('src.api.app.authenticate', return_value=True)
-    def test_update_invalid_artifact_type(self, mock_auth):
+    def test_update_invalid_artifact_type(self):
         """Test PUT /artifacts/{invalid_type}/{id} returns 400"""
         update_payload = {
             'metadata': {'name': 'test'},
@@ -305,27 +327,21 @@ class TestArtifactUpdateEndpoint(TestAPIEndpoints):
         
         self.assertEqual(response.status_code, 400)
 
-    @patch('src.api.app.authenticate', return_value=False)
-    def test_update_authentication_failed(self, mock_auth):
+    def test_update_authentication_failed(self):
         """Test PUT /artifacts/model/{id} fails with invalid authentication"""
         update_payload = {
             'metadata': {'name': 'test'},
             'data': {'url': 'https://huggingface.co/test/model'}
         }
-        response = self.client.put(
-            '/artifacts/model/123',
-            headers=self.headers,
-            data=json.dumps(update_payload)
-        )
-        
-        self.assertEqual(response.status_code, 403)
+        # call without auth headers to simulate unauthenticated request
+        response = self.client.put('/artifacts/model/123', data=json.dumps(update_payload))
+        self.assertEqual(response.status_code, 401)
 
 
 class TestArtifactsListEndpoint(TestAPIEndpoints):
     """Test /artifacts POST endpoint"""
 
-    @patch('src.api.app.authenticate', return_value=True)
-    def test_list_artifacts_success(self, mock_auth):
+    def test_list_artifacts_success(self):
         """Test POST /artifacts lists artifacts matching query"""
         # Create multiple models
         urls = [
@@ -356,8 +372,7 @@ class TestArtifactsListEndpoint(TestAPIEndpoints):
         self.assertIsInstance(data, list)
         self.assertEqual(len(data), 3)
 
-    @patch('src.api.app.authenticate', return_value=True)
-    def test_list_artifacts_by_type(self, mock_auth):
+    def test_list_artifacts_by_type(self):
         """Test POST /artifacts filters by artifact type"""
         # Create a model
         self.client.post(
@@ -381,8 +396,7 @@ class TestArtifactsListEndpoint(TestAPIEndpoints):
         data = json.loads(response.data)
         self.assertEqual(len(data), 0)
 
-    @patch('src.api.app.authenticate', return_value=True)
-    def test_list_artifacts_missing_name(self, mock_auth):
+    def test_list_artifacts_missing_name(self):
         """Test POST /artifacts fails without name field"""
         query = [{
             'types': ['model']
@@ -395,14 +409,13 @@ class TestArtifactsListEndpoint(TestAPIEndpoints):
         
         self.assertEqual(response.status_code, 400)
         data = json.loads(response.data)
-        self.assertIn('missing field', data['description'].lower())
+        self.assertIn('missing field', data.get('message', '').lower())
 
-    @patch('src.api.app.authenticate', return_value=True)
-    def test_list_artifacts_missing_types(self, mock_auth):
-        """Test POST /artifacts succeeds without types field"""
-        query = [{
+    def test_list_artifacts_missing_types(self):
+        """Test POST /artifacts fails without types field"""
+        query = {
             'name': '*'
-        }]
+        }
         response = self.client.post(
             '/artifacts',
             headers=self.headers,
@@ -411,27 +424,41 @@ class TestArtifactsListEndpoint(TestAPIEndpoints):
         
         self.assertEqual(response.status_code, 200)
 
-    @patch('src.api.app.authenticate', return_value=False)
-    def test_list_artifacts_authentication_failed(self, mock_auth):
+    def test_list_artifacts_authentication_failed(self):
         """Test POST /artifacts fails with invalid authentication"""
         query = [{
             'name': '*',
             'types': ['model']
         }]
+        # Simulate an otherwise-valid JWT but missing TokenUsage record so
+        # the application treats the token as unknown (should return 403).
+        auth_resp = self.client.put('/authenticate', json={
+            'user': {'name': os.environ.get("DEFAULT_USER")},
+            'secret': {'password': os.environ.get("DEFAULT_PASSWORD")}
+        })
+        self.assertEqual(auth_resp.status_code, 200)
+        token = auth_resp.get_json()['token']
+        headers = {'X-Authorization': f'Bearer {token}', 'Content-Type': 'application/json'}
+
+        # Remove the TokenUsage row for this token so the token is valid JWT but unknown to the app
+        jti = get_jti(encoded_token=token)
+        with self.app.app_context():
+            TokenUsage.query.filter_by(jti=jti).delete()
+            db.session.commit()
+
         response = self.client.post(
             '/artifacts',
-            headers=self.headers,
+            headers=headers,
             data=json.dumps(query)
         )
-        
+
         self.assertEqual(response.status_code, 403)
 
 
 class TestEdgeCases(TestAPIEndpoints):
     """Test edge cases and error handling"""
 
-    @patch('src.api.app.authenticate', return_value=True)
-    def test_multiple_models_same_name_different_urls(self, mock_auth):
+    def test_multiple_models_same_name_different_urls(self):
         """Test creating multiple models with different URLs generates different IDs"""
         url1 = "https://huggingface.co/openai/whisper-tiny"
         url2 = "https://huggingface.co/openai/whisper-tiny/tree/main"
@@ -460,8 +487,7 @@ class TestEdgeCases(TestAPIEndpoints):
         # Names should be the same
         self.assertEqual(data1['metadata']['name'], data2['metadata']['name'])
 
-    @patch('src.api.app.authenticate', return_value=True)
-    def test_retrieve_wrong_artifact_type(self, mock_auth):
+    def test_retrieve_wrong_artifact_type(self):
         """Test retrieving with wrong artifact type returns 404"""
         # Create a model
         test_url = "https://huggingface.co/openai/whisper-tiny"
