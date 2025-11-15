@@ -111,7 +111,7 @@ except Exception:
 def enforce_request_limit():
     jwt_data = get_jwt()
     if not jwt_data:
-        return  # no token (public route)
+        return None  # no token (public route)
 
     jti = jwt_data["jti"]
     token = TokenUsage.query.filter_by(jti=jti).first()
