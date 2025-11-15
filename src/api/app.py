@@ -124,7 +124,12 @@ def enforce_request_limit():
         db.session.commit()
         return jsonify({"msg": "Token expired after max requests"}), 403
 
-    token.increment_usage()
+    try:
+        token.increment_usage()
+    except Exception as e:
+        db.session.rollback()
+        logger.exception("Error incrementing token usage: %s", e)
+        return jsonify({"error": "Failed to increment token usage"}), 500
 
 @app.route('/', methods=['GET'])
 def index():
