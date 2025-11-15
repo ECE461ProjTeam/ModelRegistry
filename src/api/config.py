@@ -8,6 +8,9 @@ the environment when available.
 
 import os
 import json
+from src.logger import get_logger
+
+logger = get_logger("config.app")
 
 class Config:
     # Secret keys (used for signing JWTs and Flask sessions)
@@ -19,11 +22,16 @@ class Config:
     # Load database info from environment variable string
     db_info = json.loads(db_info_str) if db_info_str else {}
     
-    SQLALCHEMY_DATABASE_URI = (
-        f"postgresql+psycopg2://{db_info['username']}:{db_info['password']}"
-        f"@{db_info['host']}:{db_info['port']}/{db_info['dbname']}"
-    )
-
+    if db_info:
+        SQLALCHEMY_DATABASE_URI = (
+            f"postgresql+psycopg2://{db_info['username']}:{db_info['password']}"
+            f"@{db_info['host']}:{db_info['port']}/{db_info['dbname']}"
+        )
+    else:
+        logger.warning("DATABASE_INFO not found in environment; using default SQLite DB.")
+        # Default to local SQLite DB if no env var is set
+        SQLALCHEMY_DATABASE_URI = "sqlite:///model_registry.db"
+    
     SQLALCHEMY_TRACK_MODIFICATIONS = False # to suppress warnings
 
     # Authentication settings
