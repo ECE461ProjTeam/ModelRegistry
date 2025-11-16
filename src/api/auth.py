@@ -213,15 +213,24 @@ def delete_profile():
     if not fetch_user:
         return jsonify({'error': 'User not found.'}), 400
     
-    # Delete any token usage records for this user to avoid FK constraint
+    # Delete any token usage records for this user
     try:
-        db.session.query(TokenUsage).filter_by(user_id=fetch_user.id).delete()
+        # Remove all TokenUsage records associated with this user.
+        db.session.query(TokenUsage).filter_by(user_id=fetch_user.id).delete(synchronize_session=False)
+        db.session.commit()
     except Exception:
         db.session.rollback()
+        logger.exception("Failed deleting token usage records for user %s", fetch_user.name)
+        return jsonify({'error': 'Failed to delete user tokens.'}), 500
 
     # Delete user profile
-    db.session.delete(fetch_user)
-    db.session.commit()
+    try:
+        db.session.delete(fetch_user)
+        db.session.commit()
+    except Exception:
+        db.session.rollback()
+        logger.exception("Failed deleting user profile %s", fetch_user.name)
+        return jsonify({'error': 'Failed to delete user profile.'}), 500
     
     return jsonify({'message': 'User profile deleted successfully.'}), 200
 
