@@ -19,8 +19,6 @@ from .extensions import init_extensions, db
 from datetime import datetime, timezone
 from dotenv import load_dotenv
 import os
-import threading
-import time
 
 load_dotenv()
 
