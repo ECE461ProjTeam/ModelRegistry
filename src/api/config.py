@@ -35,8 +35,8 @@ class Config:
     SQLALCHEMY_TRACK_MODIFICATIONS = False # to suppress warnings
 
     # Authentication settings
-    TOKEN_EXPIRE_SECONDS = os.environ.get("TOKEN_EXPIRE_SECONDS", 36000) # default 10 hours
-    MAX_REQUESTS_PER_TOKEN = os.environ.get("MAX_REQUESTS_PER_TOKEN", 1000) # default: 1000 requests per token
+    TOKEN_EXPIRE_SECONDS = int(os.environ.get("TOKEN_EXPIRE_SECONDS", 36000)) # default 10 hours
+    MAX_REQUESTS_PER_TOKEN = int(os.environ.get("MAX_REQUESTS_PER_TOKEN", 1000)) # default: 1000 requests per token
     # Per OpenAPI spec this project uses X-Authorization for the token header.
     # Configure flask-jwt-extended to read the token from X-Authorization only.
     JWT_HEADER_NAME = "X-Authorization"
@@ -51,8 +51,8 @@ class TestConfig(Config):
     SQLALCHEMY_DATABASE_URI = "sqlite:///test_model_registry.db"
     
     # Shorten token expiry and request limits for testing
-    TOKEN_EXPIRE_SECONDS = os.environ.get("TEST_TOKEN_EXPIRE_SECONDS", 600)
-    MAX_REQUESTS_PER_TOKEN = os.environ.get("TEST_MAX_REQUESTS_PER_TOKEN", 10)
+    TOKEN_EXPIRE_SECONDS = int(os.environ.get("TEST_TOKEN_EXPIRE_SECONDS", 600))
+    MAX_REQUESTS_PER_TOKEN = int(os.environ.get("TEST_MAX_REQUESTS_PER_TOKEN", 10))
     
     # Tests should also use X-Authorization header
     JWT_HEADER_NAME = "X-Authorization"

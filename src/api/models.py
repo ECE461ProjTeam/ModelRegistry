@@ -13,6 +13,12 @@ from .config import TestConfig, Config
 import os
 from datetime import datetime, timezone
 
+# Check request-count based expiration number based on config
+if os.environ.get("DEBUG") == "True":
+    MAX_REQUESTS = int(TestConfig.MAX_REQUESTS_PER_TOKEN)
+else:
+    MAX_REQUESTS = int(Config.MAX_REQUESTS_PER_TOKEN)
+
 class User(db.Model):
     id = db.Column(db.Integer, primary_key=True)
     name = db.Column(db.String(150), nullable=False)
@@ -47,12 +53,6 @@ class TokenUsage(db.Model):
     @property
     def is_expired(self):
         """Check if token exceeded allowed requests."""
-        # Check request-count based expiration
-        if os.environ.get("DEBUG") == "True":
-            MAX_REQUESTS = TestConfig.MAX_REQUESTS_PER_TOKEN
-        else:
-            MAX_REQUESTS = Config.MAX_REQUESTS_PER_TOKEN
-
         # Check time-based expiration as well
         now = datetime.now(timezone.utc)
         expires = self.expires_at
