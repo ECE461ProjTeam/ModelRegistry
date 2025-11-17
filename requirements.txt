@@ -10,3 +10,5 @@ Flask-SQLAlchemy==3.1.1
 Flask-JWT-Extended==4.7.1
 dotenv==0.9.9
 python-dotenv==1.2.1
+psycopg2==2.9.11
+psycopg2-binary==2.9.6
