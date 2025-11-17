@@ -23,7 +23,11 @@ class Config:
     db_info = json.loads(db_info_str) if db_info_str else {}
 
     endpoint = os.environ.get("DATABASE_ENDPOINT", "")
-    port = int(os.environ.get("DATABASE_PORT", 5432)) # default postgres port
+    try:
+        port = int(os.environ.get("DATABASE_PORT", 5432)) # default postgres port
+    except ValueError:
+        logger.warning("DATABASE_PORT is not a valid integer; using default port 5432")
+        port = 5432
     db_name = os.environ.get("DATABASE_NAME")
     
     if db_info and endpoint and port and db_name:
