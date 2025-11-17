@@ -16,11 +16,9 @@ from .auth import auth_bp, create_default_admin
 from .models import User, TokenUsage
 from .config import Config, TestConfig
 from .extensions import init_extensions, db
-from datetime import datetime, timezone
+# from datetime import datetime, timezone
 from dotenv import load_dotenv
 import os
-import threading
-import time
 
 load_dotenv()
 
@@ -50,68 +48,12 @@ with app.app_context():
 app.register_blueprint(auth_bp)
 
 
-# Background cleanup thread to remove expired TokenUsage records.
-def _cleanup_expired_tokens_loop(interval_seconds: int = None):
-    """Daemon loop that periodically deletes expired token records.
-
-    Runs inside an application context so SQLAlchemy sessions work.
-    Uses `CLEANUP_INTERVAL_SECONDS` env var if present, otherwise defaults
-    to 600 seconds (10 mins).
-    """
-    if interval_seconds is None:
-        try:
-            interval_seconds = int(os.environ.get("CLEANUP_INTERVAL_SECONDS", "600"))
-        except Exception:
-            interval_seconds = 60
-
-    # Use the app context for DB access
-    with app.app_context():
-        while True:
-            try:
-                now = datetime.now(timezone.utc)
-
-                # Delete tokens that are time-expired
-                expired_tokens = TokenUsage.query.filter(TokenUsage.expires_at <= now).all()
-                for t in expired_tokens:
-                    db.session.delete(t)
-
-                # Also delete tokens that exceeded usage limits (cleanup safety)
-                if os.environ.get("DEBUG", "False") == "True":
-                    max_requests = TestConfig.MAX_REQUESTS_PER_TOKEN
-                else:
-                    max_requests = Config.MAX_REQUESTS_PER_TOKEN
-
-                overused = TokenUsage.query.filter(TokenUsage.usage_count >= max_requests).all()
-                for t in overused:
-                    db.session.delete(t)
-
-                if expired_tokens or overused:
-                    db.session.commit()
-            except Exception as e:
-                # If cleanup fails, rollback and continue; don't crash the thread.
-                try:
-                    db.session.rollback()
-                except Exception:
-                    pass
-                logger.exception("Error during token cleanup: %s", e)
-
-            time.sleep(interval_seconds)
-
-
-# Start the cleanup thread as a daemon so it won't prevent shutdown.
-try:
-    cleanup_thread = threading.Thread(target=_cleanup_expired_tokens_loop, daemon=True, name="token-cleanup-thread")
-    cleanup_thread.start()
-except Exception:
-    logger.exception("Failed to start token cleanup thread")
-
-
 @app.before_request
 @jwt_required(optional=True)
 def enforce_request_limit():
     jwt_data = get_jwt()
     if not jwt_data:
-        return  # no token (public route)
+        return None  # no token (public route)
 
     jti = jwt_data["jti"]
     token = TokenUsage.query.filter_by(jti=jti).first()
@@ -124,7 +66,12 @@ def enforce_request_limit():
         db.session.commit()
         return jsonify({"msg": "Token expired after max requests"}), 403
 
-    token.increment_usage()
+    try:
+        token.increment_usage()
+    except Exception as e:
+        db.session.rollback()
+        logger.exception("Error incrementing token usage: %s", e)
+        return jsonify({"error": "Failed to increment token usage"}), 500
 
 @app.route('/', methods=['GET'])
 def index():
