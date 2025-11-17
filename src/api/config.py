@@ -21,11 +21,18 @@ class Config:
     db_info_str = os.environ.get("DATABASE_INFO", "")
     # Load database info from environment variable string
     db_info = json.loads(db_info_str) if db_info_str else {}
+
+    endpoint = os.environ.get("DATABASE_ENDPOINT", "")
+    port = int(os.environ.get("DATABASE_PORT", 5432)) # default postgres port
+    db_name = os.environ.get("DATABASE_NAME")
     
-    if db_info:
+    if db_info and endpoint and port and db_name:
+        user = db_info["username"]
+        psw = db_info["password"]
+        
         SQLALCHEMY_DATABASE_URI = (
-            f"postgresql+psycopg2://{db_info['username']}:{db_info['password']}"
-            f"@{db_info['endpoint']}:{db_info['port']}/{db_info['dbname']}"
+            f"postgresql+psycopg2://{user}:{psw}"
+            f"@{endpoint}:{port}/{db_name}"
         )
     else:
         logger.warning("DATABASE_INFO not found in environment; using default SQLite DB.")
