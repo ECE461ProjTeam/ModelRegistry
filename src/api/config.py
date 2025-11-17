@@ -30,7 +30,7 @@ class Config:
         port = 5432
     db_name = os.environ.get("DATABASE_NAME")
     
-    if db_info and endpoint and port and db_name:
+    if db_info and endpoint and db_name:
         user = db_info["username"]
         psw = db_info["password"]
         
