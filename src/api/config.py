@@ -25,7 +25,7 @@ class Config:
     if db_info:
         SQLALCHEMY_DATABASE_URI = (
             f"postgresql+psycopg2://{db_info['username']}:{db_info['password']}"
-            f"@{db_info['host']}:{db_info['port']}/{db_info['dbname']}"
+            f"@{db_info['endpoint']}:{db_info['port']}/{db_info['dbname']}"
         )
     else:
         logger.warning("DATABASE_INFO not found in environment; using default SQLite DB.")
