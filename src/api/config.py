@@ -35,7 +35,7 @@ class Config:
             f"@{endpoint}:{port}/{db_name}"
         )
     else:
-        logger.warning("DATABASE_INFO not found in environment; using default SQLite DB.")
+        logger.warning("Database configuration incomplete (missing DATABASE_INFO, DATABASE_ENDPOINT, DATABASE_PORT, or DATABASE_NAME); using default SQLite DB.")
         # Default to local SQLite DB if no env var is set
         SQLALCHEMY_DATABASE_URI = "sqlite:///model_registry.db"
     
