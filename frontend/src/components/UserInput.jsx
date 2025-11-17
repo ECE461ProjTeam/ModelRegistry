@@ -6,45 +6,56 @@ export default function UserInput() {
   const [status, setStatus] = useState("");
   const [loading, setLoading] = useState(false);
 
-  // Backend URL
   const BACKEND_URL = import.meta.env.VITE_BACKEND_URL || "http://localhost:5000";
 
   const handleSubmit = async () => {
     if (!url.trim()) {
-      return setStatus("Please enter a valid URL.");
+      return setStatus({ type: "error", text: "Please enter a valid URL." });
     }
 
-    // Validate URL format
     try {
       new URL(url);
     } catch (_) {
-      return setStatus("Please enter a valid URL format.");
+      return setStatus({ type: "error", text: "Please enter a valid URL format." });
     }
 
     setLoading(true);
-    setStatus("");
+    setStatus({ type: "info", text: "Submitting..." });
 
     try {
       const response = await axios.post(`${BACKEND_URL}/artifacts/`, { url });
       if (response.status >= 200 && response.status < 300) {
-        setStatus("✅ URL submitted successfully!");
+        setStatus({ type: "success", text: "✅ URL submitted successfully!" });
         setUrl("");
       } else {
-        setStatus("⚠️ Unexpected response from server.");
+        setStatus({ type: "error", text: "⚠️ Unexpected response from server." });
       }
     } catch (error) {
       if (error.response) {
-        setStatus(
-          `❌ ${error.response.status}: ${error.response.data.message || "Server error"}`
-        );
+        setStatus({
+          type: "error",
+          text: `❌ ${error.response.status}: ${error.response.data.message || "Server error"}`,
+        });
       } else if (error.request) {
-        setStatus("❌ No response from server.");
+        setStatus({ type: "error", text: "❌ No response from server." });
       } else {
-        setStatus(`❌ ${error.message}`);
+        setStatus({ type: "error", text: `❌ ${error.message}` });
       }
-      console.error(error);
     } finally {
       setLoading(false);
+    }
+  };
+
+  const getStatusColor = (type) => {
+    switch (type) {
+      case "success":
+        return "limegreen";
+      case "error":
+        return "crimson";
+      case "info":
+        return "orange";
+      default:
+        return "white";
     }
   };
 
@@ -91,19 +102,55 @@ export default function UserInput() {
           fontSize: "1em",
           fontWeight: "500",
           fontFamily: "inherit",
-          backgroundColor: "var(--button-bg, #1a1a1a)",
-          color: "var(--text-color, white)",
+          backgroundColor: "#1a1a1a",
+          color: "white",
           cursor: loading ? "not-allowed" : "pointer",
-          transition: "border-color 0.25s",
           opacity: loading ? 0.6 : 1,
+          position: "relative",
         }}
-        onMouseOver={(e) => !loading && (e.target.style.borderColor = "#646cff")}
-        onMouseOut={(e) => (e.target.style.borderColor = "transparent")}
       >
-        {loading ? "Submitting..." : "Submit"}
+        {loading ? (
+          <>
+            <span
+              className="spinner"
+              style={{
+                width: "12px",
+                height: "12px",
+                border: "2px solid white",
+                borderTopColor: "transparent",
+                borderRadius: "50%",
+                display: "inline-block",
+                marginRight: "8px",
+                animation: "spin 1s linear infinite",
+              }}
+            ></span>
+            Uploading...
+          </>
+        ) : (
+          "Submit"
+        )}
       </button>
 
-      {status && <p id="status-text" style={{ marginTop: "1rem" }}>{status}</p>}
+      {status && (
+        <p
+          id="status-text"
+          style={{
+            marginTop: "1rem",
+            fontSize: "1.1em",
+            color: getStatusColor(status.type),
+          }}
+        >
+          {status.text}
+        </p>
+      )}
+
+      <style>{`
+        @keyframes spin {
+          from { transform: rotate(0deg); }
+          to { transform: rotate(360deg); }
+        }
+      `}</style>
     </div>
   );
 }
+
