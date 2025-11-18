@@ -1,13 +1,11 @@
 import React, { useState } from "react";
+import API_ENDPOINTS from "../config/api";
 import axios from "axios";
 
-export default function UserInput() {
+export default function Dashboard() {
   const [url, setUrl] = useState("");
   const [status, setStatus] = useState("");
   const [loading, setLoading] = useState(false);
-
-  // Backend URL
-  const BACKEND_URL = import.meta.env.VITE_BACKEND_URL || "http://localhost:5000";
 
   const handleSubmit = async () => {
     if (!url.trim()) {
@@ -25,7 +23,7 @@ export default function UserInput() {
     setStatus("");
 
     try {
-      const response = await axios.post(`${BACKEND_URL}/artifacts/`, { url });
+      const response = await axios.post(API_ENDPOINTS.ARTIFACTS, { url });
       if (response.status >= 200 && response.status < 300) {
         setStatus("✅ URL submitted successfully!");
         setUrl("");
