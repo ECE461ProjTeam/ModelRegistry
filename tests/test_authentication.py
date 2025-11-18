@@ -44,7 +44,7 @@ class TestAuthenticationEndpoints(unittest.TestCase):
 
         resp = self.client.put('/authenticate', json=payload)
         self.assertEqual(resp.status_code, 200)
-        token = resp # since auth response is "bearer <token>"
+        token = resp.get_json()
         self.assertTrue(token)
 
     def test_authenticate_invalid_password(self):
@@ -72,7 +72,7 @@ class TestAuthenticationEndpoints(unittest.TestCase):
         }
         auth_resp = self.client.put('/authenticate', json=auth_payload)
         self.assertEqual(auth_resp.status_code, 200)
-        token = auth_resp
+        token = auth_resp.get_json()
         headers = {"X-Authorization": f"{token}"}
 
         resp = self.client.get('/profile', headers=headers)
@@ -96,7 +96,7 @@ class TestAuthenticationEndpoints(unittest.TestCase):
         auth_payload = {"user": {"name": 'someuser'}, "secret": {"password": 'pw'}}
         auth_resp = self.client.put('/authenticate', json=auth_payload)
         self.assertEqual(auth_resp.status_code, 200)
-        token = auth_resp
+        token = auth_resp.get_json()
         headers = {"X-Authorization": f"{token}"}
 
         payload = {
@@ -117,7 +117,7 @@ class TestAuthenticationEndpoints(unittest.TestCase):
         }
         auth_resp = self.client.put('/authenticate', json=auth_payload)
         self.assertEqual(auth_resp.status_code, 200)
-        token = auth_resp
+        token = auth_resp.get_json()
         headers = {"X-Authorization": f"{token}"}
 
         payload = {
@@ -147,7 +147,7 @@ class TestAuthenticationEndpoints(unittest.TestCase):
         auth_payload = {"user": {"name": 'tobedeleted'}, "secret": {"password": 'deletepw'}}
         auth_resp = self.client.put('/authenticate', json=auth_payload)
         self.assertEqual(auth_resp.status_code, 200)
-        token = auth_resp
+        token = auth_resp.get_json()
         headers = {"X-Authorization": f"{token}"}
         payload = {"user": {"name": 'tobedeleted'}}
 
@@ -177,7 +177,7 @@ class TestAuthenticationEndpoints(unittest.TestCase):
         }
         auth_resp = self.client.put('/authenticate', json=auth_payload)
         self.assertEqual(auth_resp.status_code, 200)
-        token = auth_resp
+        token = auth_resp.get_json()
         headers = {"X-Authorization": f"{token}"}
         payload = {"user": {"name": 'otheruser'}}
 

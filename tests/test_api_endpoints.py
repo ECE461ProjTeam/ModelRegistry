@@ -40,7 +40,7 @@ class TestAPIEndpoints(unittest.TestCase):
             'secret': {'password': os.environ.get("DEFAULT_PASSWORD")}
         })
         if auth_resp.status_code == 200:
-            self.auth_token = auth_resp # since auth response is "bearer <token>"
+            self.auth_token = auth_resp.get_json() # since auth response is "bearer <token>"
         else:
             # Fallback to empty token so tests still run and will fail meaningfully
             self.auth_token = ''
@@ -110,7 +110,7 @@ class TestRegistryResetEndpoint(TestAPIEndpoints):
             'user': {'name': 'regular'}, 'secret': {'password': 'pw'}
         })
         self.assertEqual(auth_resp.status_code, 200)
-        token = auth_resp
+        token = auth_resp.get_json()
         headers = {'X-Authorization': f'{token}', 'Content-Type': 'application/json'}
 
         response = self.client.delete('/reset', headers=headers)
@@ -436,11 +436,14 @@ class TestArtifactsListEndpoint(TestAPIEndpoints):
             'secret': {'password': os.environ.get("DEFAULT_PASSWORD")}
         })
         self.assertEqual(auth_resp.status_code, 200)
-        token = auth_resp
+        token = auth_resp.get_json()
         headers = {'X-Authorization': f'{token}', 'Content-Type': 'application/json'}
 
         # Remove the TokenUsage row for this token so the token is valid JWT but unknown to the app
-        jti = get_jti(encoded_token=token)
+        # The authenticate endpoint returns a JSON string like "bearer <jwt>", so
+        # strip the "bearer " prefix and pass the raw token to get_jti.
+        raw_jwt = token.split(None, 1)[1]
+        jti = get_jti(encoded_token=raw_jwt)
         with self.app.app_context():
             TokenUsage.query.filter_by(jti=jti).delete()
             db.session.commit()
