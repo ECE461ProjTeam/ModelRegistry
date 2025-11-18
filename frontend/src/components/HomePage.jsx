@@ -46,13 +46,7 @@ export default function HomePage() {
                 Login
               </button>
               <button
-                onClick={() => {
-                  if (user) {
-                    navigate('/dashboard');
-                  } else {
-                    navigate('/login', { state: { error: 'Please log in to access the model registry', from: '/dashboard' } });
-                  }
-                }}
+                onClick={() => navigate('/login', { state: { error: 'Please log in to access the model registry', from: '/dashboard' } })}
                 className="inline-flex items-center gap-2 px-6 py-2 bg-white text-indigo-700 border border-indigo-200 rounded-full shadow-sm hover:bg-indigo-50"
               >
                 Explore Models
