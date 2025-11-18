@@ -20,7 +20,10 @@ def init_extensions(app):
     jwt.init_app(app)
 
     # If there is an env variable ALLOWED_ORIGINS, use it to set CORS origins, else default to localhost:5173
-    allowed_origins = os.environ.get("ALLOWED_ORIGINS", "http://localhost:5173")
+    allowed_origins = os.environ.get("ALLOWED_ORIGINS", "http://localhost:5173,https://localhost:5173").split(",")
+
+    # print allowed origins for debugging
+    print(f"Allowed origins for CORS: {allowed_origins}")
     
     CORS(app, resources={r"/*": {"origins": allowed_origins}},
          supports_credentials=True,

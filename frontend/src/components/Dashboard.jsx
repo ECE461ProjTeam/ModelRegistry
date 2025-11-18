@@ -23,7 +23,18 @@ export default function Dashboard() {
     setStatus("");
 
     try {
-      const response = await axios.post(API_ENDPOINTS.ARTIFACTS, { url });
+      // Attach token from localStorage to the request's `X-Authorization` header
+      let config = {};
+      try {
+        const token = localStorage.getItem('token');
+        if (token) {
+          config.headers = { 'X-Authorization': `Bearer ${token}` };
+        }
+      } catch (e) {
+        console.warn('Could not read token from localStorage', e);
+      }
+
+      const response = await axios.post(API_ENDPOINTS.ARTIFACTS, { url }, config);
       if (response.status >= 200 && response.status < 300) {
         setStatus("✅ URL submitted successfully!");
         setUrl("");
