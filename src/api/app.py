@@ -13,9 +13,11 @@ from flask_jwt_extended import jwt_required, get_jwt, verify_jwt_in_request
 from .classes import *
 from src.logger import get_logger
 from .auth import auth_bp, create_default_admin
-from .models import User, TokenUsage
+from .models import User, TokenUsage, Artifact
 from .config import Config, TestConfig
 from .extensions import init_extensions, db
+from src.url_parsers.url_type_handler import handle_url
+import pickle
 # from datetime import datetime, timezone
 from dotenv import load_dotenv
 import os
@@ -27,7 +29,7 @@ logger = get_logger("api.app")
 
 
 plannedTracks = ["Access control track"]
-model_registry = {}
+# model_registry = {}
 
 app = Flask(__name__)
 
@@ -148,9 +150,9 @@ def ArtifactsList():
     if len(types) == 0:
         types = ["model", "dataset", "code"]
 
-    for model in model_registry.values():
-        if model.type in types:
-            res.append(model.metadata)
+    # for model in model_registry.values():
+    #     if model.type in types:
+    #         res.append(model.metadata)
     #TODO: pagination?
     #TODO: too many artifacts?
     return jsonify(res), 200
@@ -241,13 +243,20 @@ def ArtifactCreate(artifact_type):
             newArtifact = Code(url)
         else:
             return jsonify({'message': 'Invalid artifact_type.'}), 400
-        logger.info(f"Created new {artifact_type} artifact with name: {newArtifact.name}")
-        model_registry[newArtifact.id] = newArtifact
-        # TODO: need to download the files from the link and store them in S3
-        return jsonify({"metadata": newArtifact.metadata, "data": {"url": newArtifact.url, "download_url": ""}}), 201
     except Exception as e:
         return jsonify({'message': 'There is missing field(s) in the artifact_data or it is formed improperly (must include a single url)'}), 400
 
+    #TODO: route to PostgreSQL database later
+    artifact_db = Artifact(id = int(newArtifact.id), obj = pickle.dumps(newArtifact))
+    db.session.add(artifact_db)
+    db.session.commit()
+    
+    result = {}
+    result["metadata"] = newArtifact.metadata
+    result["data"] = {"url": newArtifact.url, "download_url": newArtifact.download_link}
+
+    return jsonify(result), 201
+    
 
 @app.route('/artifact/model/<id>/rate', methods=['GET'])
 @jwt_required()
