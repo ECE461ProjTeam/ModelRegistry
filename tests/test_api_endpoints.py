@@ -18,6 +18,28 @@ from flask_jwt_extended import get_jti
 from src.api.extensions import db
 
 
+def extract_token_from_response(resp):
+    """Return the raw JWT string from an authenticate response.
+
+    Handles either a JSON object like {'token': '...'} or a raw
+    JSON string value like "bearer <token>". Strips any surrounding
+    quotes and the bearer prefix if present, returning the token only.
+    """
+    data = resp.get_json()
+    if isinstance(data, dict):
+        token_value = data.get('token') or data.get('access_token')
+    else:
+        token_value = data
+
+    if not token_value:
+        return ''
+
+    token_value = str(token_value).strip().strip('"').strip("'")
+    if token_value.lower().startswith('bearer '):
+        return token_value.split(' ', 1)[1]
+    return token_value
+
+
 class TestAPIEndpoints(unittest.TestCase):
     """Test suite for Model Registry API endpoints"""
 
@@ -40,8 +62,8 @@ class TestAPIEndpoints(unittest.TestCase):
             'secret': {'password': os.environ.get("DEFAULT_PASSWORD")}
         })
         if auth_resp.status_code == 200:
-            token = auth_resp.get_json().get('token')
-            self.auth_token = f"Bearer {token}"
+            token = extract_token_from_response(auth_resp)
+            self.auth_token = f"bearer {token}"
         else:
             # Fallback to empty token so tests still run and will fail meaningfully
             self.auth_token = ''
@@ -111,8 +133,8 @@ class TestRegistryResetEndpoint(TestAPIEndpoints):
             'user': {'name': 'regular'}, 'secret': {'password': 'pw'}
         })
         self.assertEqual(auth_resp.status_code, 200)
-        token = auth_resp.get_json()['token']
-        headers = {'X-Authorization': f'Bearer {token}', 'Content-Type': 'application/json'}
+        token = extract_token_from_response(auth_resp)
+        headers = {'X-Authorization': f'bearer {token}', 'Content-Type': 'application/json'}
 
         response = self.client.delete('/reset', headers=headers)
 
@@ -437,8 +459,8 @@ class TestArtifactsListEndpoint(TestAPIEndpoints):
             'secret': {'password': os.environ.get("DEFAULT_PASSWORD")}
         })
         self.assertEqual(auth_resp.status_code, 200)
-        token = auth_resp.get_json()['token']
-        headers = {'X-Authorization': f'Bearer {token}', 'Content-Type': 'application/json'}
+        token = extract_token_from_response(auth_resp)
+        headers = {'X-Authorization': f'bearer {token}', 'Content-Type': 'application/json'}
 
         # Remove the TokenUsage row for this token so the token is valid JWT but unknown to the app
         jti = get_jti(encoded_token=token)

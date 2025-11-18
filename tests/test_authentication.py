@@ -16,6 +16,28 @@ import os
 from dotenv import load_dotenv
 load_dotenv()
 
+
+def extract_token_from_response(resp):
+    """Return the raw JWT string from an authenticate response.
+
+    Handles either a JSON object like {'token': '...'} or a raw
+    JSON string value like "bearer <token>". Strips any surrounding
+    quotes and the bearer prefix if present, returning the token only.
+    """
+    data = resp.get_json()
+    if isinstance(data, dict):
+        token_value = data.get('token') or data.get('access_token')
+    else:
+        token_value = data
+
+    if not token_value:
+        return ''
+
+    token_value = str(token_value).strip().strip('"').strip("'")
+    if token_value.lower().startswith('bearer '):
+        return token_value.split(' ', 1)[1]
+    return token_value
+
 class TestAuthenticationEndpoints(unittest.TestCase):
     def setUp(self):
         self.app = app
@@ -43,8 +65,8 @@ class TestAuthenticationEndpoints(unittest.TestCase):
 
         resp = self.client.put('/authenticate', json=payload)
         self.assertEqual(resp.status_code, 200)
-        data = resp.get_json()
-        self.assertIn('token', data)
+        token = extract_token_from_response(resp)
+        self.assertTrue(token)
 
     def test_authenticate_invalid_password(self):
         payload = {
@@ -71,8 +93,8 @@ class TestAuthenticationEndpoints(unittest.TestCase):
         }
         auth_resp = self.client.put('/authenticate', json=auth_payload)
         self.assertEqual(auth_resp.status_code, 200)
-        token = auth_resp.get_json()['token']
-        headers = {"X-Authorization": f"Bearer {token}"}
+        token = extract_token_from_response(auth_resp)
+        headers = {"X-Authorization": f"bearer {token}"}
 
         resp = self.client.get('/profile', headers=headers)
         self.assertEqual(resp.status_code, 200)
@@ -95,8 +117,8 @@ class TestAuthenticationEndpoints(unittest.TestCase):
         auth_payload = {"user": {"name": 'someuser'}, "secret": {"password": 'pw'}}
         auth_resp = self.client.put('/authenticate', json=auth_payload)
         self.assertEqual(auth_resp.status_code, 200)
-        token = auth_resp.get_json()['token']
-        headers = {"X-Authorization": f"Bearer {token}"}
+        token = extract_token_from_response(auth_resp)
+        headers = {"X-Authorization": f"bearer {token}"}
 
         payload = {
             "user": {"name": "newuser", "is_admin": False},
@@ -116,8 +138,8 @@ class TestAuthenticationEndpoints(unittest.TestCase):
         }
         auth_resp = self.client.put('/authenticate', json=auth_payload)
         self.assertEqual(auth_resp.status_code, 200)
-        token = auth_resp.get_json()['token']
-        headers = {"X-Authorization": f"Bearer {token}"}
+        token = extract_token_from_response(auth_resp)
+        headers = {"X-Authorization": f"bearer {token}"}
 
         payload = {
             "user": {"name": "testcreated", "is_admin": False},
@@ -146,8 +168,8 @@ class TestAuthenticationEndpoints(unittest.TestCase):
         auth_payload = {"user": {"name": 'tobedeleted'}, "secret": {"password": 'deletepw'}}
         auth_resp = self.client.put('/authenticate', json=auth_payload)
         self.assertEqual(auth_resp.status_code, 200)
-        token = auth_resp.get_json()['token']
-        headers = {"X-Authorization": f"Bearer {token}"}
+        token = extract_token_from_response(auth_resp)
+        headers = {"X-Authorization": f"bearer {token}"}
         payload = {"user": {"name": 'tobedeleted'}}
 
         resp = self.client.delete('/profile', headers=headers, json=payload)
@@ -176,8 +198,8 @@ class TestAuthenticationEndpoints(unittest.TestCase):
         }
         auth_resp = self.client.put('/authenticate', json=auth_payload)
         self.assertEqual(auth_resp.status_code, 200)
-        token = auth_resp.get_json()['token']
-        headers = {"X-Authorization": f"Bearer {token}"}
+        token = extract_token_from_response(auth_resp)
+        headers = {"X-Authorization": f"bearer {token}"}
         payload = {"user": {"name": 'otheruser'}}
 
         resp = self.client.delete('/profile', headers=headers, json=payload)
