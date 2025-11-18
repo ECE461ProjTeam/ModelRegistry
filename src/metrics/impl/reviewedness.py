@@ -35,9 +35,11 @@ class ReviewednessMetric:
         # Get GitHub data from context
         github_data = context.get("github", {})
         # logger.debug(f"GitHub data present: {bool(github_data)}")
+        availability = context.get("availability", {})
+        has_code = availability.get("has_code", False)
         
         # If no GitHub repo or no code URL, return -1
-        if not github_data:
+        if not github_data or not has_code:
             return MetricResult(
                 id=self.id,
                 value=-1.0,

@@ -333,7 +333,10 @@ class TestHandleURL:
             "license_compliance": Mock(value=1.0, seconds=0.001),
             "availability": Mock(value=1.0, seconds=0.001),
             "dataset_quality": Mock(value=0.7, seconds=0.001),
-            "code_quality": Mock(value=0.8, seconds=0.001)
+            "code_quality": Mock(value=0.8, seconds=0.001),
+            "reviewedness": Mock(value=0.7, seconds=0.001),
+            "reproducibility": Mock(value=0.8, seconds=0.001),
+            "treescore": Mock(value=0.6, seconds=0.001)
         }
 
         mock_summary = {"net_score": 0.75, "net_score_latency": 10}
@@ -350,7 +353,7 @@ class TestHandleURL:
         # Check NDJSON structure
         assert ndjson["name"] == "model"  # Extracted from URL
         assert ndjson["category"] == "MODEL"
-        # It's calculated as 0.804375 based on the mock values
+        # It's calculated based on the mock values
         assert ndjson["net_score"] != 0.75
         assert ndjson["performance_claims"] == 0.75
         assert ndjson["size_score"]["raspberry_pi"] == 0.5
@@ -366,8 +369,12 @@ class TestHandleURL:
         mock_category.return_value = {"test": "MODEL"}
         mock_fetch_data.return_value = {}
 
-        # Mock missing metrics
-        mock_results = {}
+        # Mock missing metrics - but include the new ones that are required
+        mock_results = {
+            "reviewedness": Mock(value=0.75, seconds=0.001),
+            "reproducibility": Mock(value=0.75, seconds=0.001),
+            "treescore": Mock(value=0.75, seconds=0.001)
+        }
         mock_summary = {"net_score": 0.0, "net_score_latency": 0}
         mock_latencies = {"total_latency": 0.0, "components": {}}
         mock_run_metrics.return_value = (
@@ -400,7 +407,12 @@ class TestHandleURL:
         del mock_size_metric.details  # Remove details attribute
         mock_size_metric.seconds = 0.5  # Set seconds as a number, not Mock
 
-        mock_results = {"size": mock_size_metric}
+        mock_results = {
+            "size": mock_size_metric,
+            "reviewedness": Mock(value=0.75, seconds=0.001),
+            "reproducibility": Mock(value=0.75, seconds=0.001),
+            "treescore": Mock(value=0.75, seconds=0.001)
+        }
         mock_summary = {"net_score": 0.5}
         mock_latencies = {"total_latency": 0.5, "components": {"size": 0.5}}
         mock_run_metrics.return_value = (
@@ -425,7 +437,11 @@ class TestHandleURL:
         mock_category.return_value = {"model1": "MODEL", "model2": None}
         mock_fetch_data.return_value = {}
 
-        mock_results = {}
+        mock_results = {
+            "reviewedness": Mock(value=0.75, seconds=0.001),
+            "reproducibility": Mock(value=0.75, seconds=0.001),
+            "treescore": Mock(value=0.75, seconds=0.001)
+        }
         mock_summary = {"net_score": 0.5}
         mock_latencies = {"total_latency": 0.01, "components": {}}
         mock_run_metrics.return_value = (
@@ -458,7 +474,12 @@ class TestIntegration:
                     "requirements_total": 1
                 }
 
-                mock_run.return_value = ({}, {"net_score": 0.0}, {
+                mock_results = {
+                    "reviewedness": Mock(value=0.75, seconds=0.001),
+                    "reproducibility": Mock(value=0.75, seconds=0.001),
+                    "treescore": Mock(value=0.75, seconds=0.001)
+                }
+                mock_run.return_value = (mock_results, {"net_score": 0.0}, {
                                          "total_latency": 0.0, "components": {}})
 
                 models = {"test": [None, None, "https://example.com/invalid"]}
@@ -467,7 +488,7 @@ class TestIntegration:
                 assert len(result) == 1
                 # The default_ndjson function recalculates net_score based on default values (0.75 each)
                 # So even if we pass net_score=0.0, it gets overridden by the calculation
-                # Should be around 0.75    def test_url_validation_comprehensive(self):
+                # Should be around 0.75
                 assert result["test"]["net_score"] > 0.0
         """Comprehensive test of all URL validation functions."""
         # Test all valid URL types

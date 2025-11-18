@@ -21,6 +21,7 @@ from src.metrics.impl.license_compliance import LicenseComplianceMetric
 from src.metrics.impl.performance_claims import PerformanceClaimsMetric
 from src.metrics.impl.ramp_up_time import RampUpTimeMetric
 from src.metrics.impl.size import SizeMetric
+from src.metrics.impl.reproducibility import ReproducibilityMetric
 
 
 class TestAvailabilityMetric:
@@ -669,6 +670,110 @@ class TestSizeMetric:
         metric = SizeMetric()
         result = metric.compute(context)
         assert result.binary == 0
+
+class TestReproducibilityMetric:
+    """Test the ReproducibilityMetric class."""
+
+    @patch('src.metrics.impl.reproducibility.get_genai_metric_data')
+    def test_reproducibility_perfect_score(self, mock_genai):
+        """Test reproducibility with LLM returning 1 (no debugging needed)."""
+        mock_genai.return_value = "1"
+        
+        context = {
+            "code_url": "https://github.com/test/repo",
+            "performance_details": {"readme_available": True},
+            "availability": {"has_code": True},
+            "code_quality": {"maintainability_norm": 0.8}
+        }
+        
+        metric = ReproducibilityMetric()
+        result = metric.compute(context)
+        
+        assert result.value == 1.0
+        assert result.binary == 1
+        assert result.id == "reproducibility"
+
+    @patch('src.metrics.impl.reproducibility.get_genai_metric_data')
+    def test_reproducibility_needs_debugging(self, mock_genai):
+        """Test reproducibility with LLM returning 0 (needs debugging)."""
+        mock_genai.return_value = "0"
+        
+        context = {
+            "code_url": "https://github.com/test/repo",
+            "performance_details": {"readme_available": True},
+            "availability": {"has_code": True},
+            "code_quality": {"maintainability_norm": 0.8}
+        }
+        
+        metric = ReproducibilityMetric()
+        result = metric.compute(context)
+        
+        assert result.value == 0.5
+        assert result.binary == 1
+
+    @patch('src.metrics.impl.reproducibility.get_genai_metric_data')
+    def test_reproducibility_cannot_reproduce(self, mock_genai):
+        """Test reproducibility with LLM returning -1 (cannot reproduce)."""
+        mock_genai.return_value = "-1"
+        
+        context = {
+            "code_url": "https://github.com/test/repo",
+            "performance_details": {"readme_available": True},
+            "availability": {"has_code": True},
+            "code_quality": {"maintainability_norm": 0.8}
+        }
+        
+        metric = ReproducibilityMetric()
+        result = metric.compute(context)
+        
+        assert result.value == 0.0
+        assert result.binary == 1
+        assert result.details["reason"] == "FAILED: LLM failsafe"
+
+    def test_reproducibility_gate_no_readme(self):
+        """Test reproducibility fails gate check without README."""
+        context = {
+            "performance_details": {"readme_available": False},
+            "availability": {"has_code": True},
+            "code_quality": {"maintainability_norm": 0.8}
+        }
+        
+        metric = ReproducibilityMetric()
+        result = metric.compute(context)
+        
+        assert result.value == 0.0
+        assert result.binary == 0
+        assert "no_readme" in result.details["gate_reasons"]
+
+    def test_reproducibility_gate_no_code(self):
+        """Test reproducibility fails gate check without code."""
+        context = {
+            "performance_details": {"readme_available": True},
+            "availability": {"has_code": False},
+            "code_quality": {"maintainability_norm": 0.8}
+        }
+        
+        metric = ReproducibilityMetric()
+        result = metric.compute(context)
+        
+        assert result.value == 0.0
+        assert result.binary == 0
+        assert "no_code" in result.details["gate_reasons"]
+
+    def test_reproducibility_gate_low_maintainability(self):
+        """Test reproducibility fails gate check with low maintainability."""
+        context = {
+            "performance_details": {"readme_available": True},
+            "availability": {"has_code": True},
+            "code_quality": {"maintainability_norm": 0.3}
+        }
+        
+        metric = ReproducibilityMetric()
+        result = metric.compute(context)
+        
+        assert result.value == 0.0
+        assert result.binary == 0
+        assert "maintainability" in result.details["gate_reasons"]
 
 
 class TestMetricIntegration:
