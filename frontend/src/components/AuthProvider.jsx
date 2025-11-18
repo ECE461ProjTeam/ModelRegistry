@@ -114,7 +114,7 @@ const AuthProvider = ({ children }) => {
   // Memoize context value
   const contextValue = useMemo(
     () => ({ user, loading, error, logout, login }),
-    [user, loading, error]
+    [user, loading, error, logout, login]
   );
 
   return (
