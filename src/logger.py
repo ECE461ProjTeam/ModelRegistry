@@ -1,9 +1,6 @@
 """Logger configuration module for the ECE461 project."""
 import logging
 import os
-import sys
-
-
 def get_logger(name: str = "team4hope") -> logging.Logger:
     """Configure and return a logger that respects env variables."""
     logger = logging.getLogger(name)
