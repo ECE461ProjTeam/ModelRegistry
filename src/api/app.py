@@ -50,6 +50,18 @@ app.register_blueprint(auth_bp)
 
 @app.before_request
 @jwt_required(optional=True)
+def log_request():
+    logger.info(f"Received {request.method} request for {request.path} from {request.remote_addr}")
+    logger.info(f"Request body: {request.get_data(as_text=True)}")
+    
+@app.after_request
+@jwt_required(optional=True)
+def log_response(response):
+    logger.info(f"Responding with status {response.status_code} and body: {response.get_data(as_text=True)}")
+    return response
+
+@app.before_request
+@jwt_required(optional=True)
 def enforce_request_limit():
     jwt_data = get_jwt()
     if not jwt_data:

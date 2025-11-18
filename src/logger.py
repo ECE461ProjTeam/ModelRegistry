@@ -1,6 +1,7 @@
 """Logger configuration module for the ECE461 project."""
 import logging
 import os
+import sys
 
 
 def get_logger(name: str = "team4hope") -> logging.Logger:
@@ -30,11 +31,11 @@ def get_logger(name: str = "team4hope") -> logging.Logger:
     )
 
     # Console handler
-    # if level > 0:
-    #     ch = logging.StreamHandler()
-    #     ch.setLevel(logger.level)
-    #     ch.setFormatter(formatter)
-    #     logger.addHandler(ch)
+    if level > 0:
+        ch = logging.StreamHandler()
+        ch.setLevel(logger.level)
+        ch.setFormatter(formatter)
+        logger.addHandler(ch)
 
     # File handler - only write to existing files
     if log_file and level > 0 and os.path.exists(log_file):
