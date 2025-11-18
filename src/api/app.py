@@ -9,7 +9,7 @@ platforms like Elastic Beanstalk) can discover the callable.
 """
 
 from flask import Flask, jsonify, request
-from flask_jwt_extended import jwt_required, get_jwt
+from flask_jwt_extended import jwt_required, get_jwt, verify_jwt_in_request
 from .classes import *
 from src.logger import get_logger
 from .auth import auth_bp, create_default_admin
@@ -25,16 +25,21 @@ load_dotenv()
 logger = get_logger("api.app")
 
 
-
 plannedTracks = ["Access control track"]
 model_registry = {}
 
 app = Flask(__name__)
 
+
 if os.environ.get("DEBUG", "False") == "True":
     app.config.from_object(TestConfig)
+    # Record which config we loaded so prints and tests can verify it
+    app.config['ACTIVE_CONFIG'] = TestConfig.__name__
 else:
     app.config.from_object(Config)
+    app.config['ACTIVE_CONFIG'] = Config.__name__
+
+logger.debug(f"App running with config: {app.config.get('ACTIVE_CONFIG')}")
 
 init_extensions(app)
 
@@ -49,9 +54,25 @@ app.register_blueprint(auth_bp)
 
 
 @app.before_request
-@jwt_required(optional=True)
 def enforce_request_limit():
-    jwt_data = get_jwt()
+    # Let CORS preflight (OPTIONS) pass through without auth checks
+    if request.method == "OPTIONS":
+        return None
+
+    # Try to verify a JWT if one is present; do not require a token for public routes
+    try:
+        verify_jwt_in_request(optional=True)
+    except Exception:
+        # No token present or token invalid — treat as public request
+        return None
+
+    # If verify_jwt_in_request succeeded but no JWT was attached, get_jwt() will raise.
+    # Guard against that by catching the RuntimeError.
+    try:
+        jwt_data = get_jwt()
+    except RuntimeError:
+        return None
+
     if not jwt_data:
         return None  # no token (public route)
 
