@@ -7,9 +7,32 @@ jobs:
       DEFAULT_USER: ${{ secrets.DEFAULT_USER }}
       DEFAULT_PASSWORD: ${{ secrets.DEFAULT_PASSWORD }}
     steps:
+      # Backend (Python) tests
       - uses: actions/checkout@v4
       - uses: actions/setup-python@v5
-        with: { python-version: "3.11" }
-      - run: python -m pip install --upgrade pip
-      - run: pip install -r requirements.txt
-      - run: pytest
+        with:
+          python-version: "3.11"
+      - name: Install Python dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r requirements.txt
+      - name: Run backend tests
+        run: pytest
+      
+        # Frontend (Playwright) tests
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+      - name: Install frontend dependencies
+        run: |
+          cd frontend
+          npm ci
+      - name: Install Playwright browsers
+        run: |
+          cd frontend
+          npx playwright install --with-deps
+      - name: Run Playwright tests
+        run: |
+          cd frontend
+          npx playwright test
