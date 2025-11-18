@@ -28,7 +28,7 @@ export default function Dashboard() {
       try {
         const token = localStorage.getItem('token');
         if (token) {
-          config.headers = { 'X-Authorization': `Bearer ${token}` };
+          config.headers = { 'X-Authorization': `${token}` };
         }
       } catch (e) {
         console.warn('Could not read token from localStorage', e);
