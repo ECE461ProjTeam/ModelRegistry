@@ -20,7 +20,8 @@ from .extensions import init_extensions, db
 from dotenv import load_dotenv
 import os
 
-load_dotenv()
+# `override=True` ensures edits to the .env file replace current os.environ values
+load_dotenv(override=True)
 
 logger = get_logger("api.app")
 

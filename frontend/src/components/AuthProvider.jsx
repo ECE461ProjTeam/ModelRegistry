@@ -26,14 +26,15 @@ const AuthProvider = ({ children }) => {
       }
 
       const data = await res.json();
-      localStorage.setItem('token', data.token);
+      localStorage.setItem('token', data); // since data is just the token string
+
       // Backend returns only a token on successful authenticate; fetch profile to populate user
       try {
         const profileRes = await fetch(API_ENDPOINTS.PROFILE, {
           method: 'GET',
           headers: {
             'Content-Type': 'application/json',
-            'X-Authorization': `${data.token}`,
+            'X-Authorization': `${data}`,
           },
         });
 
