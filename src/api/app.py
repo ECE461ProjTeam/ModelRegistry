@@ -20,7 +20,7 @@ from .extensions import init_extensions, db
 from dotenv import load_dotenv
 import os
 
-load_dotenv()
+load_dotenv(override=True)
 
 logger = get_logger("api.app")
 
