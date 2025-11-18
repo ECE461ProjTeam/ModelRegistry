@@ -40,8 +40,7 @@ class TestAPIEndpoints(unittest.TestCase):
             'secret': {'password': os.environ.get("DEFAULT_PASSWORD")}
         })
         if auth_resp.status_code == 200:
-            token = auth_resp.get_json().get('token')
-            self.auth_token = f"Bearer {token}"
+            self.auth_token = auth_resp # since auth response is "bearer <token>"
         else:
             # Fallback to empty token so tests still run and will fail meaningfully
             self.auth_token = ''
@@ -111,8 +110,8 @@ class TestRegistryResetEndpoint(TestAPIEndpoints):
             'user': {'name': 'regular'}, 'secret': {'password': 'pw'}
         })
         self.assertEqual(auth_resp.status_code, 200)
-        token = auth_resp.get_json()['token']
-        headers = {'X-Authorization': f'Bearer {token}', 'Content-Type': 'application/json'}
+        token = auth_resp
+        headers = {'X-Authorization': f'{token}', 'Content-Type': 'application/json'}
 
         response = self.client.delete('/reset', headers=headers)
 
@@ -437,8 +436,8 @@ class TestArtifactsListEndpoint(TestAPIEndpoints):
             'secret': {'password': os.environ.get("DEFAULT_PASSWORD")}
         })
         self.assertEqual(auth_resp.status_code, 200)
-        token = auth_resp.get_json()['token']
-        headers = {'X-Authorization': f'Bearer {token}', 'Content-Type': 'application/json'}
+        token = auth_resp
+        headers = {'X-Authorization': f'{token}', 'Content-Type': 'application/json'}
 
         # Remove the TokenUsage row for this token so the token is valid JWT but unknown to the app
         jti = get_jti(encoded_token=token)

@@ -52,7 +52,7 @@ class Config:
     # Per OpenAPI spec this project uses X-Authorization for the token header.
     # Configure flask-jwt-extended to read the token from X-Authorization only.
     JWT_HEADER_NAME = "X-Authorization"
-    JWT_HEADER_TYPE = "Bearer"
+    JWT_HEADER_TYPE = "bearer"
 
 
 class TestConfig(Config):
@@ -68,4 +68,4 @@ class TestConfig(Config):
     
     # Tests should also use X-Authorization header
     JWT_HEADER_NAME = "X-Authorization"
-    JWT_HEADER_TYPE = "Bearer"
+    JWT_HEADER_TYPE = "bearer"
