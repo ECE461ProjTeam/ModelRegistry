@@ -12,12 +12,21 @@ import uuid
 from .config import TestConfig, Config
 import os
 from datetime import datetime, timezone
+import pickle
 
 # Check request-count based expiration number based on config
 if os.environ.get("DEBUG") == "True":
     MAX_REQUESTS = int(TestConfig.MAX_REQUESTS_PER_TOKEN)
 else:
     MAX_REQUESTS = int(Config.MAX_REQUESTS_PER_TOKEN)
+    
+class Artifact(db.Model):
+    id = db.Column(db.Integer, primary_key=True)
+    obj = db.Column(db.LargeBinary, nullable=False)  # Store pickled object
+    type = db.Column(db.String(50), nullable=False)
+    metadata = db.Column(db.JSON, nullable=False)
+    download_url = db.Column(db.String(200), nullable=True)
+    
 
 class User(db.Model):
     id = db.Column(db.Integer, primary_key=True)
