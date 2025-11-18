@@ -264,7 +264,6 @@ def ArtifactByRegExGet():
 
 
 @app.route('/tracks', methods=['GET'])
-@jwt_required()
 def get_tracks():
     """No description provided."""
     try:
