@@ -1,11 +1,12 @@
-import React, { createContext, useState, useContext, useMemo } from 'react';
+import React, { createContext, useState, useContext, useMemo, useEffect } from 'react';
 import API_ENDPOINTS from '../config/api';
 
 const AuthContext = createContext();
 
 const AuthProvider = ({ children }) => {
   const [user, setUser] = useState(null);
-  const [loading, setLoading] = useState(false);
+  // `loading` starts true to indicate app initialization (session restore)
+  const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
 
   // Login
@@ -26,8 +27,26 @@ const AuthProvider = ({ children }) => {
 
       const data = await res.json();
       localStorage.setItem('token', data.token);
-      // Backend returns only a token on successful authenticate; set a minimal user object
-      setUser({ name: username });
+      // Backend returns only a token on successful authenticate; fetch profile to populate user
+      try {
+        const profileRes = await fetch(API_ENDPOINTS.PROFILE, {
+          method: 'GET',
+          headers: {
+            'Content-Type': 'application/json',
+            'X-Authorization': `Bearer ${data.token}`,
+          },
+        });
+
+        if (profileRes.ok) {
+          const profileData = await profileRes.json();
+          setUser(profileData.profile || { name: username });
+        } else {
+          setUser({ name: username });
+        }
+      } catch (err) {
+        console.error('Failed to fetch profile after login:', err);
+        setUser({ name: username });
+      }
       return true;
     } catch (err) {
       console.error('Login error:', err);
@@ -45,7 +64,49 @@ const AuthProvider = ({ children }) => {
     setLoading(false);
   };
 
-  // TODO: Register Users (with permissions
+  // Restore session on app load if a token exists
+  useEffect(() => {
+    let mounted = true;
+
+    const restoreSession = async () => {
+      try {
+        const token = localStorage.getItem('token');
+        if (!token) return;
+
+        const res = await fetch(API_ENDPOINTS.PROFILE, {
+          method: 'GET',
+          headers: {
+            'Content-Type': 'application/json',
+            'X-Authorization': `Bearer ${token}`,
+          },
+        });
+
+        if (!mounted) return;
+
+        if (res.ok) {
+          const data = await res.json();
+          // Backend returns { profile: { name, is_admin, permissions, ... } }
+          setUser(data.profile || { name: data.name });
+        } else {
+          // Token invalid or expired — clear it
+          localStorage.removeItem('token');
+        }
+      } catch (err) {
+        console.error('Failed to restore session:', err);
+        localStorage.removeItem('token');
+      } finally {
+        if (mounted) setLoading(false);
+      }
+    };
+
+    restoreSession();
+
+    return () => {
+      mounted = false;
+    };
+  }, []);
+
+  // TODO: Register Users (with permissions)
   
   // TODO: Profile (fetch/update)
 

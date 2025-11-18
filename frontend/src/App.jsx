@@ -34,7 +34,7 @@ function PrivateRoute({ element }) {
   if (user) return element;
   const message = location.pathname === '/dashboard'
     ? 'Please log in to access the model registry'
-    : 'Please Sign In to access the Model Registry.';
+    : 'Please sign in to access the Model Registry.';
   return <Navigate to="/" replace state={{ error: message }} />;
 }
 
