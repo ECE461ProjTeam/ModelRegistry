@@ -33,7 +33,7 @@ const AuthProvider = ({ children }) => {
           method: 'GET',
           headers: {
             'Content-Type': 'application/json',
-            'X-Authorization': `Bearer ${data.token}`,
+            'X-Authorization': `${data.token}`,
           },
         });
 
@@ -77,7 +77,7 @@ const AuthProvider = ({ children }) => {
           method: 'GET',
           headers: {
             'Content-Type': 'application/json',
-            'X-Authorization': `Bearer ${token}`,
+            'X-Authorization': `${token}`,
           },
         });
 
