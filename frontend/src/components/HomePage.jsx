@@ -55,7 +55,7 @@ export default function HomePage() {
           </div>
         ) : (
           <div>
-            <p className="text-green-600 font-medium mb-4">Signed in as <span className="font-semibold">{user.username || user.name || user.email}</span></p>
+            <p className="text-green-600 font-medium mb-4">Signed in as <span className="font-semibold">{user.name}</span></p>
             <button
               onClick={() => navigate('/dashboard')}
               className="inline-flex items-center gap-2 px-6 py-3 bg-indigo-600 hover:bg-indigo-700 text-white rounded-md shadow-md focus:outline-none"
