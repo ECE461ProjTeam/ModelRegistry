@@ -154,11 +154,8 @@ def ArtifactsList():
     if len(types) == 0:
         types = ["model", "dataset", "code"]
 
-    # for model in model_registry.values():
-    #     if model.type in types:
-    #         res.append(model.metadata)
-    #TODO: pagination?
-    #TODO: too many artifacts?
+    queried_artifacts = Artifact.query.filter(name==name, Artifact.type.in_(types)).all()
+    res = [art.meta for art in queried_artifacts]
     return jsonify(res), 200
 
 
@@ -167,7 +164,9 @@ def ArtifactsList():
 def RegistryReset():
     """Reset the registry to a system default state."""
     logger.info("Resetting the model registry to default state.")
-    model_registry.clear()
+    db.session.query(Artifact).delete()
+    db.session.commit()
+    # model_registry.clear()
 
     return jsonify({'message': 'Registry is reset.'}), 200
 
@@ -179,12 +178,12 @@ def ArtifactRetrieve(artifact_type, id):
     if artifact_type not in ["model", "dataset", "code"] or not id.isdigit():
         return jsonify({'message': 'There is missing field(s) in the artifact_type or artifact_id or it is formed improperly, or is invalid.'}), 400
 
-    if id not in model_registry:
+    artifact = Artifact.query.filter_by(id=int(id)).first()
+    if not artifact:
         return jsonify({'message': 'Artifact does not exist.'}), 404
     try:
-        model = model_registry[id]
-        if model.type == artifact_type:
-            return jsonify(model.metadata), 200
+        if artifact.type == artifact_type:
+            return jsonify(artifact.meta), 200
     except Exception as e:
         pass
 
@@ -203,13 +202,16 @@ def ArtifactUpdate(artifact_type, id):
         metadata = req_data.get("metadata")
         upd_data = req_data.get("data")
         
-        model = model_registry[id]
-        if model.type == artifact_type and model.id == id:
-            model_registry[id].metadata.update(metadata)
-            model_registry[id].url = upd_data.get("url")
+        artifact = Artifact.query.filter_by(id=int(id)).first()
+        if artifact and artifact.type == artifact_type and str(artifact.id) == id:
+            # artifact.update({'meta': metadata, 'url': upd_data.get("url"), 'download_url': upd_data.get("download_url")})
+            artifact.meta = metadata
+            artifact.download_url = upd_data.get("download_url")
+            artifact.url = upd_data.get("url")
+            db.session.commit()
             return jsonify({'message': 'Artifact is updated.'}), 200
     except Exception as e:
-        pass
+        logger.error(f"Error updating artifact: {e}")
         #TODO: return code on wrong request body
         #TODO: update S3 files if url is changed
 
@@ -233,25 +235,31 @@ def ArtifactCreate(artifact_type):
         logger.info(f"Creating new artifact of type {artifact_type}")
         data = request.get_json()
         url = data.get("url")
+        name = data.get("name", None)
         if artifact_type == "model":
-            newArtifact = Model(url)
+            newArtifact = Model(url, name)
         elif artifact_type == "dataset":
-            newArtifact = Dataset(url)
+            newArtifact = Dataset(url, name)
         elif artifact_type == "code":
-            newArtifact = Code(url)
+            newArtifact = Code(url, name)
         else:
             return jsonify({'message': 'Invalid artifact_type.'}), 400
     except Exception as e:
+        logger.error(f"Error creating artifact: {e}")
         return jsonify({'message': 'There is missing field(s) in the artifact_data or it is formed improperly (must include a single url)'}), 400
 
     #TODO: route to PostgreSQL database later
-    artifact_db = Artifact(id = int(newArtifact.id), obj = pickle.dumps(newArtifact))
+    artifact_db = Artifact(id = int(newArtifact.id), url=newArtifact.url, 
+                           type=newArtifact.type, 
+                           obj=pickle.dumps(newArtifact), 
+                           meta=newArtifact.metadata, 
+                           download_url=newArtifact.download_url)
     db.session.add(artifact_db)
     db.session.commit()
     
     result = {}
     result["metadata"] = newArtifact.metadata
-    result["data"] = {"url": newArtifact.url, "download_url": newArtifact.download_link}
+    result["data"] = {"url": newArtifact.url, "download_url": newArtifact.download_url}
 
     return jsonify(result), 201
     
