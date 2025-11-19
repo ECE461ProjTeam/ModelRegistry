@@ -271,19 +271,20 @@ class TestArtifactUpdateEndpoint(TestAPIEndpoints):
     def test_update_model_success(self):
         """Test PUT /artifacts/model/{id} updates existing model"""
         # Create a model first
-        test_url = "https://huggingface.co/openai/whisper-tiny"
+        test_url = "https://huggingface.co/google-bert/bert-base-uncased"
         create_response = self.client.post(
             '/artifact/model',
             headers=self.headers,
-            data=json.dumps({'url': test_url})
+            data=json.dumps({'name': 'bert-base-uncased', 'url': test_url})
         )
         created_data = json.loads(create_response.data)
         artifact_id = created_data['metadata']['id']
+        new_id = "48472749248"
         
         # Update the model
         update_payload = {
-            'metadata': {'name': 'whisper-tiny', 'custom_field': 'updated_value'},
-            'data': {'url': 'https://huggingface.co/openai/whisper-tiny/tree/v2'}
+            'metadata': {'name': 'string', 'id': new_id, "type": "model"},
+            'data': {"url": "https://huggingface.co/openai/whisper-tiny/tree/main", "download_url": "https://ec2-10-121-34-12/download/whisper-tiny"}
         }
         response = self.client.put(
             f'/artifacts/model/{artifact_id}',
@@ -297,10 +298,11 @@ class TestArtifactUpdateEndpoint(TestAPIEndpoints):
         
         # Verify the update
         with self.app.app_context():
-            artifact = Artifact.query.filter_by(id=artifact_id).first()
+            artifact = Artifact.query.filter_by(id=int(new_id)).first()
             self.assertIsNotNone(artifact)
-            self.assertEqual(artifact.meta.get('custom_field'), 'updated_value')
-            self.assertEqual(artifact.url, 'https://huggingface.co/openai/whisper-tiny/tree/v2')
+            self.assertEqual(artifact.name, 'string')
+            self.assertEqual(artifact.url, 'https://huggingface.co/openai/whisper-tiny/tree/main')
+            self.assertEqual(artifact.download_url, 'https://ec2-10-121-34-12/download/whisper-tiny')
 
     def test_update_model_not_found(self):
         """Test PUT /artifacts/model/{id} returns 404 for non-existent model"""
