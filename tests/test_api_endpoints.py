@@ -53,7 +53,9 @@ class TestAPIEndpoints(unittest.TestCase):
 
     def tearDown(self):
         """Clean up after each test"""
-        Artifact.query.delete()
+        with self.app.app_context():
+            Artifact.query.delete()
+            db.session.commit()
         # pop the app context pushed in setUp
         try:
             self._ctx.pop()
