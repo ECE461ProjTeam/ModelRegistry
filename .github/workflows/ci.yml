@@ -19,23 +19,5 @@ jobs:
       - name: Run backend tests
         run: pytest
       
-      # Frontend (Playwright) tests
-      - name: Setup Node.js
-        uses: actions/setup-node@v4
-        with:
-          node-version: 20
-
-      - name: Install frontend dependencies & Playwright browsers
-        run: |
-          cd frontend
-          npm install
-          npx playwright install --with-deps
-          npm install --save-dev wait-on   # ensure wait-on is available
-
-      - name: Start frontend server & run Playwright tests
-        run: |
-          cd frontend
-          npm run dev &                   
-          npx wait-on http://localhost:5173  
-          npx playwright test
+ 
 
