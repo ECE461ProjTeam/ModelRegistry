@@ -63,7 +63,7 @@ class TestConfig(Config):
     SQLALCHEMY_DATABASE_URI = "sqlite:///test_model_registry.db"
     
     # Shorten token expiry and request limits for testing
-    TOKEN_EXPIRE_SECONDS = int(os.environ.get("TEST_TOKEN_EXPIRE_SECONDS", 3600))
+    TOKEN_EXPIRE_SECONDS = int(os.environ.get("TEST_TOKEN_EXPIRE_SECONDS", 600))
     MAX_REQUESTS_PER_TOKEN = int(os.environ.get("TEST_MAX_REQUESTS_PER_TOKEN", 10))
     
     # Tests should also use X-Authorization header

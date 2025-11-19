@@ -149,9 +149,14 @@ def ArtifactsList():
 
     if len(types) == 0:
         types = ["model", "dataset", "code"]
+        
+    arts_by_type = Artifact.query.filter(Artifact.type.in_(types)).all()
 
-    queried_artifacts = Artifact.query.filter(name==name, Artifact.type.in_(types)).all()
-    res = [art.meta for art in queried_artifacts]
+    if name == "*":
+        queried_artifacts = arts_by_type
+    else:
+        queried_artifacts = [art for art in arts_by_type if art.name == name]
+    res = [{"id": art.id, "name": art.name, "type": art.type} for art in queried_artifacts]
     return jsonify(res), 200
 
 
@@ -185,7 +190,8 @@ def ArtifactRetrieve(artifact_type, id):
         return jsonify({'message': 'Artifact does not exist.'}), 404
     try:
         if artifact.type == artifact_type:
-            return jsonify(artifact.meta), 200
+            metadata = {"id": artifact.id, "name": artifact.name, "type": artifact.type}
+            return jsonify(metadata), 200
     except Exception as e:
         pass
 
@@ -206,10 +212,16 @@ def ArtifactUpdate(artifact_type, id):
         
         artifact = Artifact.query.filter_by(id=int(id)).first()
         if artifact and artifact.type == artifact_type and str(artifact.id) == id:
-            # artifact.update({'meta': metadata, 'url': upd_data.get("url"), 'download_url': upd_data.get("download_url")})
-            artifact.meta = metadata
-            artifact.download_url = upd_data.get("download_url")
-            artifact.url = upd_data.get("url")
+            if metadata.get("name", None):
+                artifact.name = metadata.get("name")
+            if metadata.get("type", None):
+                artifact.type = metadata.get("type")
+            if metadata.get("id", None):
+                artifact.id = int(metadata.get("id"))
+            if upd_data.get("download_url", None):
+                artifact.download_url = upd_data.get("download_url")
+            if upd_data.get("url", None):
+                artifact.url = upd_data.get("url")
             db.session.commit()
             return jsonify({'message': 'Artifact is updated.'}), 200
     except Exception as e:
@@ -253,11 +265,15 @@ def ArtifactCreate(artifact_type):
     #TODO: route to PostgreSQL database later
     artifact_db = Artifact(id = int(newArtifact.id), url=newArtifact.url, 
                            type=newArtifact.type, 
-                           obj=pickle.dumps(newArtifact), 
-                           meta=newArtifact.metadata, 
-                           download_url=newArtifact.download_url)
-    db.session.add(artifact_db)
-    db.session.commit()
+                           download_url=newArtifact.download_url,
+                           name=newArtifact.name)
+    
+    try:
+        db.session.add(artifact_db)
+        db.session.commit()
+    except Exception as e:
+        logger.error(f"Error saving artifact to database: {e}")
+        return jsonify({'message': 'Failed to save artifact to database.'}), 500
     
     result = {}
     result["metadata"] = newArtifact.metadata

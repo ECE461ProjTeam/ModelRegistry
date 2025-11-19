@@ -12,7 +12,7 @@ class Artifact():
         self.url = url
         self.name = name
         self.download_url = ""
-        self.id = str(int(uuid.uuid4().int % 1e9))
+        self.id = int(uuid.uuid4().int % 1e9)
 
 
 class Model(Artifact):
@@ -20,10 +20,9 @@ class Model(Artifact):
         super().__init__(url, name)
         self.type = "model"
         hf_match = re.match(r"https?://huggingface\.co/([^/]+)/([^/]+)", url)
-        if self.name is None and hf_match:
-            self.name = hf_match.group(2)
-        else:
-            raise ValueError("Invalid model URL")
+        if self.name is None and not hf_match:
+            raise ValueError("Name must be provided for models.")
+        self.name = self.name if self.name else hf_match.group(2)
         self.metadata = {'name': self.name, 'id': self.id, 'type': self.type}
                 
 class Dataset(Artifact):
