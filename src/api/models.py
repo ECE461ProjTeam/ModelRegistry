@@ -24,8 +24,10 @@ class Artifact(db.Model):
     id = db.Column(db.Integer, primary_key=True)
     obj = db.Column(db.LargeBinary, nullable=False)  # Store pickled object
     type = db.Column(db.String(50), nullable=False)
-    metadata = db.Column(db.JSON, nullable=False)
-    download_url = db.Column(db.String(200), nullable=True)
+    meta = db.Column(db.JSON, nullable=False)
+    download_url = db.Column(db.String(300), nullable=True)
+    name = db.Column(db.String(150), nullable=True)
+    url = db.Column(db.String(300), nullable=False)
     
 
 class User(db.Model):
