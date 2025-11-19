@@ -106,12 +106,10 @@ def authenticate():
     db.session.add(token_record)
     db.session.commit()
 
-    # Whenever we issue a new token, reset the request counter and update
-    # the last_reset timestamp so the user starts with a fresh quota.
-    # (Token expiry itself is handled by Flask-JWT-Extended via the
-    # `expires_delta` above.)
+    token_value = f"bearer {access_token}"
 
-    return jsonify({'token': access_token}), 200
+    # return jsonify({'token': token_value}), 200
+    return jsonify(token_value), 200
 
 
 @auth_bp.route('/register', methods=['POST'])
