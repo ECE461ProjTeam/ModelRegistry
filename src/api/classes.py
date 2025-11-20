@@ -7,7 +7,7 @@ from src.logger import get_logger
 
 logger = get_logger("api.app")
 
-class Artifact():
+class BaseArtifact():
     def __init__(self, url, name=None):
         self.url = url
         self.name = name
@@ -15,7 +15,7 @@ class Artifact():
         self.id = int(uuid.uuid4().int % 1e9)
 
 
-class Model(Artifact):
+class Model(BaseArtifact):
     def __init__(self, url, name=None):
         super().__init__(url, name)
         self.type = "model"
@@ -25,14 +25,14 @@ class Model(Artifact):
         self.name = self.name if self.name else hf_match.group(2)
         self.metadata = {'name': self.name, 'id': self.id, 'type': self.type}
                 
-class Dataset(Artifact):
+class Dataset(BaseArtifact):
     def __init__(self, url, name=None):
         super().__init__(url, name)
         self.type = "dataset"
         self.metadata = {'name': self.name, 'id': self.id, 'type': self.type}
 
 
-class Code(Artifact):
+class Code(BaseArtifact):
     def __init__(self, url, name=None):
         super().__init__(url, name)
         self.type = "code"
