@@ -202,7 +202,7 @@ def register():
     if not isinstance(user["permissions"], list):
         return jsonify({'error': 'Permissions must be a list.'}), 400
     
-    if len(user["permissions"]) == 0:
+    if not user["is_admin"] and len(user["permissions"]) == 0:
         return jsonify({'error': 'User must have at least one permission.'}), 400
 
     # Create new user

@@ -9,8 +9,6 @@ to call the endpoints.
 """
 
 import unittest
-
-from flask import jsonify
 from src.api.app import app
 from src.api.models import User, Artifact
 from src.api.extensions import db
@@ -248,7 +246,7 @@ class TestPermissions(unittest.TestCase):
         """Test that the check_permissions decorator denies access when permissions are missing."""
         # Create a user without the required permission
         with self.app.app_context():
-            u = User(name='nopermuser', is_admin=False, permissions=[])
+            u = User(name='nopermuser', is_admin=False, permissions=['other'])
             u.set_password('nopermpw')
             db.session.add(u)
             db.session.commit()
@@ -260,8 +258,9 @@ class TestPermissions(unittest.TestCase):
         token = auth_resp.get_json()
         headers = {"X-Authorization": f"{token}"}
 
-        # Access the protected route
-        resp = self.client.post('/artifacts', headers=headers)
+        # Access the protected route with a valid artifact query
+        payload = {"name": "whisper-tiny", "types": ["model"]}
+        resp = self.client.post('/artifacts', headers=headers, json=payload)
         self.assertEqual(resp.status_code, 401)
     
     def test_check_permissions_decorator_admin(self):
