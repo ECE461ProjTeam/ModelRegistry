@@ -40,3 +40,4 @@ dist-ssr
 !.elasticbeanstalk/*.cfg.yml
 !.elasticbeanstalk/*.global.yml
 .ssh/
+.aws/

@@ -13,9 +13,11 @@ from flask_jwt_extended import jwt_required, get_jwt, verify_jwt_in_request
 from .classes import *
 from src.logger import get_logger
 from .auth import auth_bp, create_default_admin
-from .models import User, TokenUsage
+from .models import User, TokenUsage, Artifact
 from .config import Config, TestConfig
 from .extensions import init_extensions, db
+from src.url_parsers.url_type_handler import handle_url
+import pickle
 # from datetime import datetime, timezone
 from dotenv import load_dotenv
 import os
@@ -27,7 +29,7 @@ logger = get_logger("api.app")
 
 
 plannedTracks = ["Access control track"]
-model_registry = {}
+# model_registry = {}
 
 app = Flask(__name__)
 
@@ -147,12 +149,14 @@ def ArtifactsList():
 
     if len(types) == 0:
         types = ["model", "dataset", "code"]
+        
+    arts_by_type = Artifact.query.filter(Artifact.type.in_(types)).all()
 
-    for model in model_registry.values():
-        if model.type in types:
-            res.append(model.metadata)
-    #TODO: pagination?
-    #TODO: too many artifacts?
+    if name == "*":
+        queried_artifacts = arts_by_type
+    else:
+        queried_artifacts = [art for art in arts_by_type if art.name == name]
+    res = [{"id": art.id, "name": art.name, "type": art.type} for art in queried_artifacts]
     return jsonify(res), 200
 
 
@@ -167,7 +171,9 @@ def RegistryReset():
         return jsonify({'message': 'You do not have permission to reset the registry.'}), 401
 
     logger.info("Resetting the model registry to default state.")
-    model_registry.clear()
+    db.session.query(Artifact).delete()
+    db.session.commit()
+    # model_registry.clear()
 
     return jsonify({'message': 'Registry is reset.'}), 200
 
@@ -179,12 +185,13 @@ def ArtifactRetrieve(artifact_type, id):
     if artifact_type not in ["model", "dataset", "code"] or not id.isdigit():
         return jsonify({'message': 'There is missing field(s) in the artifact_type or artifact_id or it is formed improperly, or is invalid.'}), 400
 
-    if id not in model_registry:
+    artifact = Artifact.query.filter_by(id=int(id)).first()
+    if not artifact:
         return jsonify({'message': 'Artifact does not exist.'}), 404
     try:
-        model = model_registry[id]
-        if model.type == artifact_type:
-            return jsonify(model.metadata), 200
+        if artifact.type == artifact_type:
+            metadata = {"id": artifact.id, "name": artifact.name, "type": artifact.type}
+            return jsonify(metadata), 200
     except Exception as e:
         pass
 
@@ -203,13 +210,22 @@ def ArtifactUpdate(artifact_type, id):
         metadata = req_data.get("metadata")
         upd_data = req_data.get("data")
         
-        model = model_registry[id]
-        if model.type == artifact_type and model.id == id:
-            model_registry[id].metadata.update(metadata)
-            model_registry[id].url = upd_data.get("url")
+        artifact = Artifact.query.filter_by(id=int(id)).first()
+        if artifact and artifact.type == artifact_type and str(artifact.id) == id:
+            if metadata.get("name", None):
+                artifact.name = metadata.get("name")
+            if metadata.get("type", None):
+                artifact.type = metadata.get("type")
+            if metadata.get("id", None):
+                artifact.id = int(metadata.get("id"))
+            if upd_data.get("download_url", None):
+                artifact.download_url = upd_data.get("download_url")
+            if upd_data.get("url", None):
+                artifact.url = upd_data.get("url")
+            db.session.commit()
             return jsonify({'message': 'Artifact is updated.'}), 200
     except Exception as e:
-        pass
+        logger.error(f"Error updating artifact: {e}")
         #TODO: return code on wrong request body
         #TODO: update S3 files if url is changed
 
@@ -233,21 +249,38 @@ def ArtifactCreate(artifact_type):
         logger.info(f"Creating new artifact of type {artifact_type}")
         data = request.get_json()
         url = data.get("url")
+        name = data.get("name", None)
         if artifact_type == "model":
-            newArtifact = Model(url)
+            newArtifact = Model(url, name)
         elif artifact_type == "dataset":
-            newArtifact = Dataset(url)
+            newArtifact = Dataset(url, name)
         elif artifact_type == "code":
-            newArtifact = Code(url)
+            newArtifact = Code(url, name)
         else:
             return jsonify({'message': 'Invalid artifact_type.'}), 400
-        logger.info(f"Created new {artifact_type} artifact with name: {newArtifact.name}")
-        model_registry[newArtifact.id] = newArtifact
-        # TODO: need to download the files from the link and store them in S3
-        return jsonify({"metadata": newArtifact.metadata, "data": {"url": newArtifact.url, "download_url": ""}}), 201
     except Exception as e:
+        logger.error(f"Error creating artifact: {e}")
         return jsonify({'message': 'There is missing field(s) in the artifact_data or it is formed improperly (must include a single url)'}), 400
 
+    #TODO: route to PostgreSQL database later
+    artifact_db = Artifact(id = int(newArtifact.id), url=newArtifact.url, 
+                           type=newArtifact.type, 
+                           download_url=newArtifact.download_url,
+                           name=newArtifact.name)
+    
+    try:
+        db.session.add(artifact_db)
+        db.session.commit()
+    except Exception as e:
+        logger.error(f"Error saving artifact to database: {e}")
+        return jsonify({'message': 'Failed to save artifact to database.'}), 500
+    
+    result = {}
+    result["metadata"] = newArtifact.metadata
+    result["data"] = {"url": newArtifact.url, "download_url": newArtifact.download_url}
+
+    return jsonify(result), 201
+    
 
 @app.route('/artifact/model/<id>/rate', methods=['GET'])
 @jwt_required()

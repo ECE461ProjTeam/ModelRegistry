@@ -12,8 +12,8 @@ load_dotenv()
 
 sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), '..')))
 
-from src.api.app import app, model_registry
-from src.api.models import User, TokenUsage
+from src.api.app import app
+from src.api.models import User, TokenUsage, Artifact
 from flask_jwt_extended import get_jti
 from src.api.extensions import db
 
@@ -26,7 +26,8 @@ class TestAPIEndpoints(unittest.TestCase):
         self.app = app
         self.client = self.app.test_client()
         self.app.testing = True
-        model_registry.clear()
+        with self.app.app_context():
+            Artifact.query.delete()
         # Push app context so authenticate endpoint and JWT machinery work
         self._ctx = self.app.app_context()
         self._ctx.push()
@@ -52,7 +53,9 @@ class TestAPIEndpoints(unittest.TestCase):
 
     def tearDown(self):
         """Clean up after each test"""
-        model_registry.clear()
+        with self.app.app_context():
+            Artifact.query.delete()
+            db.session.commit()
         # pop the app context pushed in setUp
         try:
             self._ctx.pop()
@@ -95,7 +98,8 @@ class TestRegistryResetEndpoint(TestAPIEndpoints):
         data = json.loads(response.data)
         # app returns 'message' key for success responses
         self.assertEqual(data.get('message'), 'Registry is reset.')
-        self.assertEqual(len(model_registry), 0)
+        with self.app.app_context():
+            self.assertEqual(Artifact.query.count(), 0)
 
     def test_reset_unauthorized(self):
         """Test DELETE /reset fails for non-admin user"""
@@ -151,7 +155,8 @@ class TestArtifactCreateEndpoint(TestAPIEndpoints):
         self.assertIn('type', metadata)
         self.assertEqual(metadata['name'], 'whisper-tiny')
         self.assertEqual(metadata['type'], 'model')
-        self.assertIn(metadata['id'], model_registry)
+        with self.app.app_context():
+            self.assertIsNotNone(Artifact.query.filter_by(id=metadata['id']).first())
 
     def test_create_model_missing_url(self):
         """Test POST /artifact/model fails without url"""
@@ -268,19 +273,20 @@ class TestArtifactUpdateEndpoint(TestAPIEndpoints):
     def test_update_model_success(self):
         """Test PUT /artifacts/model/{id} updates existing model"""
         # Create a model first
-        test_url = "https://huggingface.co/openai/whisper-tiny"
+        test_url = "https://huggingface.co/google-bert/bert-base-uncased"
         create_response = self.client.post(
             '/artifact/model',
             headers=self.headers,
-            data=json.dumps({'url': test_url})
+            data=json.dumps({'name': 'bert-base-uncased', 'url': test_url})
         )
         created_data = json.loads(create_response.data)
         artifact_id = created_data['metadata']['id']
+        new_id = "48472749248"
         
         # Update the model
         update_payload = {
-            'metadata': {'name': 'whisper-tiny', 'custom_field': 'updated_value'},
-            'data': {'url': 'https://huggingface.co/openai/whisper-tiny/tree/v2'}
+            'metadata': {'name': 'string', 'id': new_id, "type": "model"},
+            'data': {"url": "https://huggingface.co/openai/whisper-tiny/tree/main", "download_url": "https://ec2-10-121-34-12/download/whisper-tiny"}
         }
         response = self.client.put(
             f'/artifacts/model/{artifact_id}',
@@ -293,8 +299,12 @@ class TestArtifactUpdateEndpoint(TestAPIEndpoints):
         self.assertEqual(data.get('message'), 'Artifact is updated.')
         
         # Verify the update
-        self.assertEqual(model_registry[artifact_id].metadata['custom_field'], 'updated_value')
-        self.assertEqual(model_registry[artifact_id].url, 'https://huggingface.co/openai/whisper-tiny/tree/v2')
+        with self.app.app_context():
+            artifact = Artifact.query.filter_by(id=int(new_id)).first()
+            self.assertIsNotNone(artifact)
+            self.assertEqual(artifact.name, 'string')
+            self.assertEqual(artifact.url, 'https://huggingface.co/openai/whisper-tiny/tree/main')
+            self.assertEqual(artifact.download_url, 'https://ec2-10-121-34-12/download/whisper-tiny')
 
     def test_update_model_not_found(self):
         """Test PUT /artifacts/model/{id} returns 404 for non-existent model"""
@@ -343,6 +353,9 @@ class TestArtifactsListEndpoint(TestAPIEndpoints):
     def test_list_artifacts_success(self):
         """Test POST /artifacts lists artifacts matching query"""
         # Create multiple models
+        with self.app.app_context():
+            Artifact.query.delete()
+            db.session.commit()
         urls = [
             "https://huggingface.co/openai/whisper-tiny",
             "https://huggingface.co/openai/whisper-base",
