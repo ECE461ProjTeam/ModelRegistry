@@ -12,7 +12,7 @@ import unittest
 
 from flask import jsonify
 from src.api.app import app
-from src.api.models import User
+from src.api.models import User, Artifact
 from src.api.extensions import db
 import os
 from dotenv import load_dotenv
@@ -212,6 +212,38 @@ class TestPermissions(unittest.TestCase):
         # Pop the application context we pushed in setUp
         self._ctx.pop()
 
+    def test_check_permissions_decorator_allowed(self):
+        """Test that the check_permissions decorator allows access when permissions are present."""
+        # Create a user with the required permission
+        with self.app.app_context():
+            u = User(name='permuser', is_admin=False, permissions=['search'])
+            u.set_password('permpw')
+            db.session.add(u)
+            db.session.commit()
+
+        # Create an Artifact
+        with self.app.app_context():
+            artifact = Artifact(
+                type="model",
+                download_url="",
+                name="whisper-tiny",
+                url="https://huggingface.co/openai/whisper-tiny"
+            )
+            db.session.add(artifact)
+            db.session.commit()
+
+        # Authenticate as the user to get a token
+        auth_payload = {"user": {"name": 'permuser'}, "secret": {"password": 'permpw'}}
+        auth_resp = self.client.put('/authenticate', json=auth_payload)
+        self.assertEqual(auth_resp.status_code, 200)
+        token = auth_resp.get_json()
+        headers = {"X-Authorization": f"{token}"}
+
+        # Access the protected route with a valid artifact query
+        payload = {"name": "whisper-tiny", "types": ["model"]}
+        resp = self.client.post('/artifacts', headers=headers, json=payload)
+        self.assertEqual(resp.status_code, 200)
+
     def test_check_permissions_decorator_denied(self):
         """Test that the check_permissions decorator denies access when permissions are missing."""
         # Create a user without the required permission
@@ -247,6 +279,7 @@ class TestPermissions(unittest.TestCase):
         # Access the protected route
         resp = self.client.delete('/reset', headers=headers)
         self.assertEqual(resp.status_code, 200)
+
 
 if __name__ == '__main__':
     unittest.main()
