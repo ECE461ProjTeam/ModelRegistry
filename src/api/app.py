@@ -12,7 +12,7 @@ from flask import Flask, jsonify, request
 from flask_jwt_extended import jwt_required, get_jwt, verify_jwt_in_request
 from .classes import *
 from src.logger import get_logger
-from .auth import auth_bp, create_default_admin
+from .auth import auth_bp, create_default_admin, check_permissions
 from .models import User, TokenUsage
 from .config import Config, TestConfig
 from .extensions import init_extensions, db
@@ -59,12 +59,14 @@ app.register_blueprint(auth_bp)
 def log_request():
     logger.info(f"Received {request.method} request for {request.path} from {request.remote_addr}")
     logger.info(f"Request body: {request.get_data(as_text=True)}")
-    
+
+   
 @app.after_request
 @jwt_required(optional=True)
 def log_response(response):
     logger.info(f"Responding with status {response.status_code} and body: {response.get_data(as_text=True)}")
     return response
+
 
 @app.before_request
 @jwt_required(optional=True)
@@ -108,10 +110,12 @@ def enforce_request_limit():
         logger.exception("Error incrementing token usage: %s", e)
         return jsonify({"error": "Failed to increment token usage"}), 500
 
+
 @app.route('/', methods=['GET'])
 def index():
     """Index route to verify that the API is running."""
     return jsonify({'message': 'Model Registry API is running'}), 200
+
 
 @app.route('/health', methods=['GET'])
 def health():
@@ -120,7 +124,7 @@ def health():
 
 
 @app.route('/artifacts', methods=['POST'])
-@jwt_required()
+@check_permissions('search')
 def ArtifactsList():
     """Get any artifacts fitting the query. Search for artifacts satisfying the indicated query.
 
@@ -157,15 +161,9 @@ def ArtifactsList():
 
 
 @app.route('/reset', methods=['DELETE'])
-@jwt_required()
+@check_permissions()
 def RegistryReset():
     """Reset the registry to a system default state."""
-    # Only admins may reset the registry
-    claims = get_jwt()
-    is_admin = claims.get('is_admin', False)
-    if not is_admin:
-        return jsonify({'message': 'You do not have permission to reset the registry.'}), 401
-
     logger.info("Resetting the model registry to default state.")
     model_registry.clear()
 
@@ -173,7 +171,7 @@ def RegistryReset():
 
 
 @app.route('/artifacts/<artifact_type>/<id>', methods=['GET'])
-@jwt_required()
+@check_permissions("search", "download")
 def ArtifactRetrieve(artifact_type, id):
     """Return this artifact."""
     if artifact_type not in ["model", "dataset", "code"] or not id.isdigit():
@@ -192,7 +190,7 @@ def ArtifactRetrieve(artifact_type, id):
 
 
 @app.route('/artifacts/<artifact_type>/<id>', methods=['PUT'])
-@jwt_required()
+@check_permissions("upload", "search")
 def ArtifactUpdate(artifact_type, id):
     """The name, version, and id must match. The artifact source (from artifact_data) will replace the previous contents."""
     if artifact_type not in ["model", "dataset", "code"] or not id.isdigit():
@@ -217,14 +215,14 @@ def ArtifactUpdate(artifact_type, id):
 
 # NON-BASELINE
 @app.route('/artifacts/<artifact_type>/<id>', methods=['DELETE'])
-@jwt_required()
+@check_permissions()
 def ArtifactDelete(artifact_type, id):
     """Delete only the artifact that matches 'id'. (id is a unique identifier for an artifact)."""    
     return jsonify({'message': 'Not implemented'}), 501
 
 
 @app.route('/artifact/<artifact_type>', methods=['POST'])
-@jwt_required()
+@check_permissions("upload", "search")
 def ArtifactCreate(artifact_type):
     """Register a new artifact by providing a downloadable source URL. Artifacts may share a name with existing entries if their version differs.
     Refer to the description above to see how an id is formed for an artifact.
@@ -250,49 +248,49 @@ def ArtifactCreate(artifact_type):
 
 
 @app.route('/artifact/model/<id>/rate', methods=['GET'])
-@jwt_required()
+@check_permissions("search")
 def ModelArtifactRate(id):
     """Get ratings for this model artifact. (BASELINE)."""
     return jsonify({'message': 'Not implemented'}), 501
 
 
 @app.route('/artifact/<artifact_type>/<id>/cost', methods=['GET'])
-@jwt_required()
+@check_permissions("search")
 def get_artifact_artifact_type_id_cost(artifact_type, id):
     """Get the cost of an artifact (BASELINE)."""
     return jsonify({'message': 'Not implemented'}), 501
 
 
 @app.route('/artifact/byName/<name>', methods=['GET'])
-@jwt_required()
+@check_permissions("search")
 def ArtifactByNameGet(name):
     """Return metadata for each version matching this artifact name."""
     return jsonify({'message': 'Not implemented'}), 501
 
 
 @app.route('/artifact/<artifact_type>/<id>/audit', methods=['GET'])
-@jwt_required()
+@check_permissions("search")
 def ArtifactAuditGet(artifact_type, id):
     """No description provided."""
     return jsonify({'message': 'Not implemented'}), 501
 
 
 @app.route('/artifact/model/<id>/lineage', methods=['GET'])
-@jwt_required()
+@check_permissions("search")
 def ArtifactLineageGet(id):
     """No description provided."""
     return jsonify({'message': 'Not implemented'}), 501
 
 
 @app.route('/artifact/model/<id>/license-check', methods=['POST'])
-@jwt_required()
+@check_permissions("search")
 def ArtifactLicenseCheck(id):
     """No description provided."""
     return jsonify({'message': 'Not implemented'}), 501
 
 
 @app.route('/artifact/byRegEx', methods=['POST'])
-@jwt_required()
+@check_permissions("search")
 def ArtifactByRegExGet():
     """No description provided."""
     return jsonify({'message': 'Not implemented'}), 501
