@@ -12,8 +12,8 @@ from flask import Flask, jsonify, request
 from flask_jwt_extended import jwt_required, get_jwt, verify_jwt_in_request
 from .classes import *
 from src.logger import get_logger
-from .auth import auth_bp, create_default_admin
-from .models import User, TokenUsage
+from .models import User, TokenUsage, Artifact
+from .auth import auth_bp, create_default_admin, check_permissions
 from .config import Config, TestConfig
 from .extensions import init_extensions, db
 from src.url_parsers.url_type_handler import handle_url
