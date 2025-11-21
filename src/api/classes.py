@@ -12,7 +12,7 @@ class BaseArtifact():
         self.url = url
         self.name = name
         self.download_url = ""
-        self.id = int(uuid.uuid4().int % 1e9)
+        self.id = int(uuid.uuid4().int % 1e11)
 
 
 class Model(BaseArtifact):
