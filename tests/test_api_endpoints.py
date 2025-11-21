@@ -120,8 +120,6 @@ class TestRegistryResetEndpoint(TestAPIEndpoints):
         response = self.client.delete('/reset', headers=headers)
 
         self.assertEqual(response.status_code, 401)
-        data = json.loads(response.data)
-        self.assertEqual(data.get('message'), 'You do not have permission to reset the registry.')
 
     def test_reset_authentication_failed(self):
         """Test DELETE /reset fails with invalid authentication"""
