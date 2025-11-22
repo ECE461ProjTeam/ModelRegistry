@@ -47,21 +47,26 @@ curl -X POST 'http://localhost:5001/artifact/model' \
   -H 'Content-Type: application/json' \
   -d ' {"name": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaab", "url": "https://huggingface.co/parthvpatil18/aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaab"}'
 
-
-curl -X PUT "http://localhost:5001/artifacts/model/$bert_id" \
+curl -X POST 'http://localhost:5001/artifact/model' \
   -H "X-Authorization: $stripped_string" \
   -H 'Content-Type: application/json' \
-  -d '{
-      "metadata": {
-        "name": "string",
-        "id": "48472749248",
-        "type": "model"
-      },
-      "data": {
-        "url": "https://huggingface.co/openai/whisper-tiny/tree/main",
-        "download_url": "https://ec2-10-121-34-12/download/whisper-tiny"
-      }
-}'
+  -d ' {"name": "whisper-base", "url": "https://huggingface.co/openai/whisper-tiny"}'
+
+
+# curl -X PUT "http://localhost:5001/artifacts/model/$bert_id" \
+#   -H "X-Authorization: $stripped_string" \
+#   -H 'Content-Type: application/json' \
+#   -d '{
+#       "metadata": {
+#         "name": "string",
+#         "id": "48472749248",
+#         "type": "model"
+#       },
+#       "data": {
+#         "url": "https://huggingface.co/openai/whisper-tiny/tree/main",
+#         "download_url": "https://ec2-10-121-34-12/download/whisper-tiny"
+#       }
+# }'
 
 getall
 
@@ -70,7 +75,7 @@ getall
 
 # getall
 
-curl -X GET "http://localhost:5001/artifact/byName/bookcorpus" \
+curl -X GET "http://localhost:5001/artifact/byName/whisper" \
   -H "X-Authorization: $stripped_string"
 
 curl -X POST "http://localhost:5001/artifact/byRegEx" \
