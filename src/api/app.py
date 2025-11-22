@@ -188,12 +188,12 @@ def ArtifactRetrieve(artifact_type, id):
     artifact = Artifact.query.filter_by(id=int(id)).first()
     if not artifact:
         return jsonify({'message': 'Artifact does not exist.'}), 404
-    try:
-        if artifact.type == artifact_type:
-            metadata = {"id": artifact.id, "name": artifact.name, "type": artifact.type}
-            return jsonify(metadata), 200
-    except Exception as e:
-        pass
+    
+    if artifact.type == artifact_type:
+        metadata = {"id": artifact.id, "name": artifact.name, "type": artifact.type}
+        data = {"url": artifact.url}
+        res = {"metadata": metadata, "data": data}
+        return jsonify(res), 200
 
     return jsonify({'message': 'Artifact does not exist.'}), 404
 
@@ -235,8 +235,19 @@ def ArtifactUpdate(artifact_type, id):
 @app.route('/artifacts/<artifact_type>/<id>', methods=['DELETE'])
 @jwt_required()
 def ArtifactDelete(artifact_type, id):
-    """Delete only the artifact that matches 'id'. (id is a unique identifier for an artifact)."""    
-    return jsonify({'message': 'Not implemented'}), 501
+    if artifact_type not in ["model", "dataset", "code"] or not id.isdigit():
+        return jsonify({'message': 'There is missing field(s) in the artifact_type or artifact_id or invalid.'}), 400
+    
+    if not Artifact.query.filter_by(id=int(id)).first():
+        return jsonify({'message': 'Artifact does not exist.'}), 404
+
+    Artifact.query.filter_by(id=(int(id))).delete()
+    db.session.commit()
+
+    if Artifact.query.filter_by(id=int(id)).first():
+        return jsonify({'message': 'Deletion failed.'}), 500
+    
+    return jsonify({'message': 'Artifact is deleted.'}), 200
 
 
 @app.route('/artifact/<artifact_type>', methods=['POST'])
@@ -262,7 +273,6 @@ def ArtifactCreate(artifact_type):
         logger.error(f"Error creating artifact: {e}")
         return jsonify({'message': 'There is missing field(s) in the artifact_data or it is formed improperly (must include a single url)'}), 400
 
-    #TODO: route to PostgreSQL database later
     artifact_db = Artifact(id = int(newArtifact.id), url=newArtifact.url, 
                            type=newArtifact.type, 
                            download_url=newArtifact.download_url,
