@@ -310,7 +310,19 @@ def get_artifact_artifact_type_id_cost(artifact_type, id):
 @jwt_required()
 def ArtifactByNameGet(name):
     """Return metadata for each version matching this artifact name."""
-    return jsonify({'message': 'Not implemented'}), 501
+    if not name:
+        return jsonify({'message': 'There is missing field(s) in the artifact_name or it is formed improperly, or is invalid.'}), 400
+
+    if name == "*":
+        artifacts = Artifact.query.all()
+    else:
+        artifacts = Artifact.query.filter_by(name=name).all()
+
+    if not artifacts:
+        return jsonify({'message': 'No such artifact.'}), 404    
+    
+    res = [{"name": art.name, "id": art.id, "type": art.type} for art in artifacts]
+    return jsonify(res), 200
 
 
 @app.route('/artifact/<artifact_type>/<id>/audit', methods=['GET'])
