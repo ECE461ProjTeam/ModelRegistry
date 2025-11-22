@@ -17,10 +17,13 @@ from .models import User, TokenUsage, Artifact
 from .config import Config, TestConfig
 from .extensions import init_extensions, db
 from src.url_parsers.url_type_handler import handle_url
-import pickle
 # from datetime import datetime, timezone
 from dotenv import load_dotenv
 import os
+import re
+from sqlalchemy import event
+from .extensions import db
+from .byRegex import regex_bp
 
 # `override=True` ensures edits to the .env file replace current os.environ values
 load_dotenv(override=True)
@@ -53,7 +56,16 @@ with app.app_context():
     if not admin_user:
         create_default_admin()
 
+    # Enable REGEXP support for SQLite
+    @event.listens_for(db.engine, "connect")
+    def sqlite_enable_regex(conn, record):
+        def regexp(pattern, string):
+            reg = re.compile(pattern)
+            return reg.search(string) is not None
+        conn.create_function("REGEXP", 2, regexp)
+
 app.register_blueprint(auth_bp)
+app.register_blueprint(regex_bp)
 
 
 @app.before_request
@@ -342,13 +354,6 @@ def ArtifactLineageGet(id):
 @app.route('/artifact/model/<id>/license-check', methods=['POST'])
 @jwt_required()
 def ArtifactLicenseCheck(id):
-    """No description provided."""
-    return jsonify({'message': 'Not implemented'}), 501
-
-
-@app.route('/artifact/byRegEx', methods=['POST'])
-@jwt_required()
-def ArtifactByRegExGet():
     """No description provided."""
     return jsonify({'message': 'Not implemented'}), 501
 
