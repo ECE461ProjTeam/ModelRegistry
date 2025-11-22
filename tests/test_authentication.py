@@ -222,6 +222,7 @@ class TestPermissions(unittest.TestCase):
         # Create an Artifact
         with self.app.app_context():
             artifact = Artifact(
+                id=1,
                 type="model",
                 download_url="",
                 name="whisper-tiny",
