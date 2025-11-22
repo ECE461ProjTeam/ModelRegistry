@@ -223,7 +223,7 @@ class TestArtifactRetrieveEndpoint(TestAPIEndpoints):
         )
         
         self.assertEqual(response.status_code, 200)
-        data = json.loads(response.data)
+        data = json.loads(response.data)["metadata"]
         self.assertEqual(data['name'], 'whisper-tiny')
         self.assertEqual(data['id'], artifact_id)
         self.assertEqual(data['type'], 'model')
