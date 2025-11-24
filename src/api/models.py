@@ -7,6 +7,7 @@ to a database when the Flask app is initialized.
 """
 
 import zipfile
+from urllib.parse import urlparse
 from src.api.s3 import get_download_link, upload_file_to_s3
 from src.metrics.data_fetcher.huggingface import download_hf_model
 from .extensions import db
@@ -152,7 +153,10 @@ class Artifact(db.Model):
     @staticmethod
     def is_valid_url(url: str) -> bool:
         """Check if the provided URL is a valid HTTP/HTTPS URL format."""
-        return url.startswith("http://") or url.startswith("https://")
+        if not url:
+            return False
+        parsed = urlparse(url)
+        return parsed.scheme in ("http", "https") and bool(parsed.netloc)
         
 
 class User(db.Model):
