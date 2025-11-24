@@ -18,7 +18,6 @@ from datetime import datetime, timezone
 from src.logger import get_logger
 from ..url_parsers.url_type_handler import handle_url
 from ..cli.validate import validate_ndjson
-import requests
 
 logger = get_logger("api.models")
 
@@ -152,8 +151,8 @@ class Artifact(db.Model):
     
     @staticmethod
     def is_valid_url(url: str) -> bool:
-        """Check if the provided URL is a valid HTTP/HTTPS URL."""
-        return (url.startswith("http://") or url.startswith("https://")) and requests.get(url).status_code != 404
+        """Check if the provided URL is a valid HTTP/HTTPS URL format."""
+        return url.startswith("http://") or url.startswith("https://")
         
 
 class User(db.Model):
