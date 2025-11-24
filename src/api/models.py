@@ -57,8 +57,10 @@ class Artifact(db.Model):
                     return
             else:
                 self.ingestible = True          
-            
-            self.send_to_bucket()
+            try:
+                self.send_to_bucket()
+            except Exception as e:
+                logger.error(f"Error sending artifact {self.id} to bucket: {e}")
         else:
             self.ingestible = True  # For non-model artifacts, set ingestible to True by default
                 

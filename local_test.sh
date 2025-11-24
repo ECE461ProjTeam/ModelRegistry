@@ -25,22 +25,31 @@ response=$(curl -X PUT http://localhost:5001/authenticate \
 
 stripped_string="${response//\"/}"
 
-echo $stripped_string
+# echo $stripped_string
 
-clean
+getall
 
-response=$(curl -X POST 'http://localhost:5001/artifact/model' \
-  -H "X-Authorization: $stripped_string" \
-  -H 'Content-Type: application/json' \
-  -d '{"url": "https://huggingface.co/google-bert/bert-base-uncased"}')
 
-bert_id=$(echo $response | jq -r '.metadata.id')
-echo "BERT ID: $bert_id"
+# clean
+
+# response=$(curl -X POST 'http://localhost:5001/artifact/model' \
+#   -H "X-Authorization: $stripped_string" \
+#   -H 'Content-Type: application/json' \
+#   -d '{"name": "google-bert", "url": "https://huggingface.co/google-bert/bert-base-uncased"}')
+
+# echo $response
+
+# bert_id=$(echo $response | jq -r '.metadata.id')
+# echo "BERT ID: $bert_id"
 
 curl -X POST 'http://localhost:5001/artifact/dataset' \
   -H "X-Authorization: $stripped_string" \
   -H 'Content-Type: application/json' \
   -d '{ "name": "bookcorpus", "url": "https://huggingface.co/datasets/bookcorpus/bookcorpus"}'
+
+
+curl -X POST "http://localhost:5001/artifact/model/$bert_id/rate" \
+  -H "X-Authorization: $stripped_string" \
 
 
 curl -X PUT "http://localhost:5001/artifacts/model/$bert_id" \
