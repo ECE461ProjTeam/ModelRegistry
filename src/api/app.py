@@ -246,7 +246,7 @@ def ArtifactDelete(artifact_type, id):
 @check_permissions("upload", "search")
 def ArtifactCreate(artifact_type):
     """Register a new artifact by providing a downloadable source URL. Artifacts may share a name with existing entries if their version differs.
-    Refer to the message above to see how an id is formed for an artifact.
+    Refer to the description above to see how an id is formed for an artifact.
     """
     try:
         logger.info(f"Creating new artifact of type {artifact_type}")

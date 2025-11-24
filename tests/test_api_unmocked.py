@@ -8,10 +8,8 @@ load_dotenv()
 sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), '..')))
 
 from src.api.app import app
-from src.api.models import User, TokenUsage, Artifact
-from flask_jwt_extended import get_jti
+from src.api.models import Artifact
 from src.api.extensions import db
-from unittest.mock import patch
 
 class TestAPIUnmocked(unittest.TestCase):
     """Test suite for Model Registry API endpoints"""

@@ -13,7 +13,7 @@ pip install -r requirements.txt
 - `GITHUB_TOKEN` - Your GitHub token
 - `GEN_AI_STUDIO_API_KEY` - Purdue GenAI Studio API key 
 
-- Under the `.aws/` directory, create a file named `credentials` that contains your AWS indentification keys.
+- Under the `.aws/` directory, create a file named `credentials` that contains your AWS identification keys.
 
 ```
 [default]

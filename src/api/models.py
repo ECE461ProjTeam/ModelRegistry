@@ -106,11 +106,14 @@ class Artifact(db.Model):
         """Download model files and store them in S3."""
         logger.info(f"Downloading model files for artifact {self.id} from {self.url}")
         local_dir = download_hf_model(self.url, cache_dir="./hf_cache")
+        if local_dir is None:
+            logger.error(f"Failed to download model files for artifact {self.id} from {self.url}")
+            return
         logger.info(f"Downloaded model files to {local_dir}")
         
         try:
-            logger.info(f"Creating zip file {self.id}.zip (size: {self.cost} MB)")
             self.zip_model(local_dir)
+            logger.info(f"Created zip file {self.id}.zip (size: {self.cost} MB)")
             logger.info(f"Uploading zip file {self.id}.zip to S3")
             success = upload_file_to_s3(f"{local_dir}/{self.id}.zip", f"{self.id}.zip")
             if not success:
@@ -153,8 +156,13 @@ class Artifact(db.Model):
     @staticmethod
     def is_valid_url(url: str) -> bool:
         """Check if the provided URL is a valid HTTP/HTTPS URL."""
-        return (url.startswith("http://") or url.startswith("https://")) and requests.get(url).status_code != 404
-        
+        if not (url.startswith("http://") or url.startswith("https://")):
+            return False
+        try:
+            response = requests.get(url)
+            return response.status_code != 404
+        except requests.exceptions.RequestException:
+            return False
 
 class User(db.Model):
     id = db.Column(db.Integer, primary_key=True)

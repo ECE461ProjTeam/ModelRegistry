@@ -86,12 +86,7 @@ class TestAPIEndpoints(unittest.TestCase):
             # Ignore exceptions during context pop in teardown to avoid masking test failures.
             pass
 
-# class TestTest(TestAPIEndpoints):
-#     def test_test(self):
-#         """Basic test to verify test framework is working"""
-#         art = Artifact(type="model", url="https://huggingface.co/openai/whisper-tiny")
-#         self.assertEqual(art.send_to_bucket(), "hello")
-        
+
         
 class TestTracksEndpoint(TestAPIEndpoints):
     """Test /tracks endpoint"""

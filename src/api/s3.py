@@ -15,7 +15,7 @@ def upload_file_to_s3(file_name: str, artifact_id: str) -> bool:
     :return: True if file was uploaded, else False
     """
     try:
-        response = s3_client.upload_file(file_name, BUCKET_NAME, artifact_id)
+        s3_client.upload_file(file_name, BUCKET_NAME, artifact_id)
     except Exception as e:
         logger.error(f"Error uploading file to S3: {e}")
         return False
