@@ -47,6 +47,7 @@ class TestAPIEndpoints(unittest.TestCase):
         self.app.testing = True
         with self.app.app_context():
             Artifact.query.delete()
+            db.session.commit()
         # Push app context so authenticate endpoint and JWT machinery work
         self._ctx = self.app.app_context()
         self._ctx.push()
@@ -556,7 +557,6 @@ def suite():
     test_suite.addTest(unittest.makeSuite(TestArtifactUpdateEndpoint))
     test_suite.addTest(unittest.makeSuite(TestArtifactsListEndpoint))
     test_suite.addTest(unittest.makeSuite(TestEdgeCases))
-    # test_suite.addTest(unittest.makeSuite(TestTest))
     return test_suite
 
 
