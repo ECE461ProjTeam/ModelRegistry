@@ -28,9 +28,11 @@ class TestAPIEndpoints(unittest.TestCase):
         cls.patch_send = patch('src.api.models.Artifact.send_to_bucket', return_value="None")
         cls.patch_clear = patch('src.api.s3.clear_s3_bucket', return_value=None)
         cls.patch_rate = patch('src.api.models.Artifact.rate', return_value=True)
+        cls.patch_reset = patch('src.api.app.clear_s3_bucket', return_value=None)
         cls.mock_send = cls.patch_send.start()
         cls.mock_clear = cls.patch_clear.start()
         cls.mock_rate = cls.patch_rate.start()
+        cls.mock_reset = cls.patch_reset.start()
         
         
         
@@ -39,6 +41,7 @@ class TestAPIEndpoints(unittest.TestCase):
         cls.patch_send.stop()
         cls.patch_clear.stop()
         cls.patch_rate.stop()
+        cls.patch_reset.stop()
     
     def setUp(self):
         """Set up test client and clear registry before each test"""

@@ -10,6 +10,7 @@ to call the endpoints.
 
 import json
 import unittest
+from unittest.mock import patch
 from src.api.app import app
 from src.api.models import User, Artifact
 from src.api.extensions import db
@@ -192,8 +193,16 @@ class TestAuthenticationEndpoints(unittest.TestCase):
             u2 = User.query.filter_by(name='otheruser').first()
             self.assertIsNone(u2)
 
-
 class TestPermissions(unittest.TestCase):
+    @classmethod
+    def setUpClass(cls):
+        cls.patch_clear = patch('src.api.app.clear_s3_bucket', return_value=None)
+        cls.mock_clear = cls.patch_clear.start()
+        
+    @classmethod
+    def tearDownClass(cls):
+        cls.patch_clear.stop()
+    
     def setUp(self):
         self.app = app
         self.client = self.app.test_client()
@@ -258,7 +267,7 @@ class TestPermissions(unittest.TestCase):
         payload = {"name": "whisper-tiny", "types": ["model"]}
         resp = self.client.post('/artifacts', headers=headers, json=payload)
         self.assertEqual(resp.status_code, 401)
-    
+        
     def test_check_permissions_decorator_admin(self):
         """Test that admin users bypass permission checks in the check_permissions decorator."""
         # Authenticate as the default admin user to get a token
