@@ -1,9 +1,10 @@
+import os
 import boto3
 from src.logger import get_logger
 
 logger = get_logger("api.s3")
 
-BUCKET_NAME = "ece461team-model-registry-storage"
+BUCKET_NAME = os.environ.get("BUCKET_NAME")
 s3_client = boto3.client('s3')
 
 def upload_file_to_s3(file_name: str, artifact_id: str) -> bool:

@@ -21,8 +21,7 @@ from ..cli.validate import validate_ndjson
 
 logger = get_logger("api.models")
 
-CHECK_INGESTIBILITY = False
-
+CHECK_INGESTIBILITY = int(os.environ.get("CHECK_INGESTIBILITY", 0))
 
 # Check request-count based expiration number based on config
 if os.environ.get("DEBUG") == "True":
