@@ -8,9 +8,10 @@ dict with keys "name" and "is_admin") and use the Flask test client
 to call the endpoints.
 """
 
+import json
 import unittest
 from src.api.app import app
-from src.api.models import User
+from src.api.models import User, Artifact
 from src.api.extensions import db
 import os
 from dotenv import load_dotenv
@@ -100,12 +101,12 @@ class TestAuthenticationEndpoints(unittest.TestCase):
         headers = {"X-Authorization": f"{token}"}
 
         payload = {
-            "user": {"name": "newuser", "is_admin": False},
+            "user": {"name": "newuser", "is_admin": False, "permissions": ["search"]},
             "secret": {"password": "pw"}
         }
 
         resp = self.client.post('/register', headers=headers, json=payload)
-        self.assertEqual(resp.status_code, 403)
+        self.assertEqual(resp.status_code, 401)
         data = resp.get_json()
         self.assertIn('error', data)
 
@@ -121,7 +122,7 @@ class TestAuthenticationEndpoints(unittest.TestCase):
         headers = {"X-Authorization": f"{token}"}
 
         payload = {
-            "user": {"name": "testcreated", "is_admin": False},
+            "user": {"name": "testcreated", "is_admin": False, "permissions": ["search"]},
             "secret": {"password": "testpw123"}
         }
 
@@ -190,6 +191,89 @@ class TestAuthenticationEndpoints(unittest.TestCase):
         with self.app.app_context():
             u2 = User.query.filter_by(name='otheruser').first()
             self.assertIsNone(u2)
+
+
+class TestPermissions(unittest.TestCase):
+    def setUp(self):
+        self.app = app
+        self.client = self.app.test_client()
+        self.app.testing = True
+        # Push an application context so helpers like create_access_token
+        # and DB operations that rely on current_app work inside tests.
+        self._ctx = self.app.app_context()
+        self._ctx.push()
+
+    def tearDown(self):
+        # Remove any non-default users created during tests
+        # keep the default admin user, remove others
+        User.query.filter(User.name != os.environ.get("DEFAULT_USER")).delete()
+        db.session.commit()
+        # Pop the application context we pushed in setUp
+        self._ctx.pop()
+
+    def test_check_permissions_decorator_allowed(self):
+        """Test that the check_permissions decorator allows access when permissions are present."""
+        """Test that the check_permissions decorator allows access when permissions are present."""
+        # Create a user with the required permission
+        with self.app.app_context():
+            u = User(name='permuser', is_admin=False, permissions=['search', 'upload'])
+            u.set_password('permpw')
+            db.session.add(u)
+            db.session.commit()
+
+        # Authenticate as the user to get a token
+        auth_payload = {"user": {"name": 'permuser'}, "secret": {"password": 'permpw'}}
+        auth_resp = self.client.put('/authenticate', json=auth_payload)
+        self.assertEqual(auth_resp.status_code, 200)
+        token = auth_resp.get_json()
+        headers = {"X-Authorization": f"{token}", "Content-Type": "application/json"}
+
+        # Create an Artifact
+        test_url = "https://huggingface.co/openai/whisper-tiny"
+        payload = {'url': test_url}
+        response = self.client.post(
+                    '/artifact/model',
+                    headers=headers,
+                    data=json.dumps(payload)
+                )
+        self.assertEqual(response.status_code, 201)
+
+    def test_check_permissions_decorator_denied(self):
+        """Test that the check_permissions decorator denies access when permissions are missing."""
+        # Create a user without the required permission
+        with self.app.app_context():
+            u = User(name='nopermuser', is_admin=False, permissions=['other'])
+            u.set_password('nopermpw')
+            db.session.add(u)
+            db.session.commit()
+
+        # Authenticate as the user to get a token
+        auth_payload = {"user": {"name": 'nopermuser'}, "secret": {"password": 'nopermpw'}}
+        auth_resp = self.client.put('/authenticate', json=auth_payload)
+        self.assertEqual(auth_resp.status_code, 200)
+        token = auth_resp.get_json()
+        headers = {"X-Authorization": f"{token}"}
+
+        # Access the protected route with a valid artifact query
+        payload = {"name": "whisper-tiny", "types": ["model"]}
+        resp = self.client.post('/artifacts', headers=headers, json=payload)
+        self.assertEqual(resp.status_code, 401)
+    
+    def test_check_permissions_decorator_admin(self):
+        """Test that admin users bypass permission checks in the check_permissions decorator."""
+        # Authenticate as the default admin user to get a token
+        auth_payload = {
+            "user": {"name": os.environ.get("DEFAULT_USER")},
+            "secret": {"password": os.environ.get("DEFAULT_PASSWORD")}
+        }
+        auth_resp = self.client.put('/authenticate', json=auth_payload)
+        self.assertEqual(auth_resp.status_code, 200)
+        token = auth_resp.get_json()
+        headers = {"X-Authorization": f"{token}"}
+
+        # Access the protected route
+        resp = self.client.delete('/reset', headers=headers)
+        self.assertEqual(resp.status_code, 200)
 
 
 if __name__ == '__main__':

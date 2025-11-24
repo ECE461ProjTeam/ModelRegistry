@@ -13,7 +13,7 @@ from .models import User, TokenUsage
 from .config import Config, TestConfig
 from datetime import timedelta, datetime, timezone
 import os
-
+import functools
 
 auth_bp = Blueprint("auth_bp", __name__)
 config = TestConfig if os.environ.get("DEBUG") == "True" else Config
@@ -40,6 +40,50 @@ def create_default_admin():
     new_admin.set_password(admin_password)
     db.session.add(new_admin)
     db.session.commit()
+
+
+def check_permissions(*required_permissions):
+    """
+    Decorator that requires the user to have ALL specified permissions. If no permissions are specified,
+    only admin users are allowed.
+    Admin users automatically bypass permission checks.
+    Usage:
+        @app.route('/some_protected_route')
+        @check_permissions("permission1", "permission2")
+        def protected_route():
+            ...
+    Returns:
+        200 OK: If the user has the required permissions.
+        401 Unauthorized: If the user lacks required permissions.
+    """
+    def decorator(fn):
+        @jwt_required()
+        @functools.wraps(fn)
+        def wrapper(*args, **kwargs):
+            claims = get_jwt()
+            is_admin = claims.get("is_admin", False)
+            permissions = claims.get("permissions", [])
+
+            # If no permissions are defined, admin-only access
+            if not required_permissions:
+                if not is_admin:
+                    return jsonify({'error': 'Admin-access only.'}), 401
+                return fn(*args, **kwargs)
+
+            # Admins automatically bypass permission checks
+            if is_admin:
+                return fn(*args, **kwargs)
+
+            # Check if user has ALL required permissions
+            missing = [p for p in required_permissions if p not in permissions]
+            if missing:
+                return jsonify({
+                    'error': f'You do not have all required permissions. Missing {missing}.'
+                }), 401
+
+            return fn(*args, **kwargs)
+        return wrapper
+    return decorator
 
 
 @auth_bp.route('/authenticate', methods=['PUT'])
@@ -113,7 +157,7 @@ def authenticate():
 
 
 @auth_bp.route('/register', methods=['POST'])
-@jwt_required()
+@check_permissions()
 def register():
     """
     Register a new user. Only an admin can register new users.
@@ -121,7 +165,8 @@ def register():
     {
         "user": {
             "name": "username",
-            "is_admin": true/false
+            "is_admin": true/false,
+            "permissions": ["permission1", "permission2", ...]
         },
         "secret": {
             "password": "user's password"
@@ -135,20 +180,13 @@ def register():
     # Check if request is JSON
     if not request or not request.is_json:
         return jsonify({'error': 'Invalid request format.'}), 400
-
-     # Verify admin permissions
-    claims = get_jwt()  # dict with additional_claims
-    is_admin = claims.get("is_admin", False)
-
-    if not is_admin:
-        return jsonify({'error': 'Admin privileges required to register new users.'}), 403
     
     # Extract new user information from the request
     user = request.json.get("user")
     secret = request.json.get("secret")
 
     # Validate presence of required fields
-    if not user or not secret or "name" not in user or "password" not in secret or "is_admin" not in user:
+    if not user or not secret or ("name" not in user) or ("password" not in secret) or ("is_admin" not in user) or ("permissions" not in user):
         return jsonify({'error': 'Missing required fields in request.'}), 400
     
     # Check if user already exists
@@ -156,8 +194,15 @@ def register():
     if existing_user:
         return jsonify({'error': 'User already exists.'}), 400
     
+    # Ensure permissions is not empty and is a list
+    if not isinstance(user["permissions"], list):
+        return jsonify({'error': 'Permissions must be a list.'}), 400
+    
+    if not user["is_admin"] and len(user["permissions"]) == 0:
+        return jsonify({'error': 'User must have at least one permission.'}), 400
+
     # Create new user
-    new_user = User(name=user["name"], is_admin=user["is_admin"])
+    new_user = User(name=user["name"], is_admin=user["is_admin"], permissions=user["permissions"])
     new_user.set_password(secret["password"])
     
     db.session.add(new_user)
@@ -183,6 +228,7 @@ def delete_profile():
         200 OK: If profile deletion is successful.
         400 Bad Request: If any required field is missing or invalid.
         403 Forbidden: If the current user is not authorized to delete the specified profile.
+        500 Internal Server Error: If deletion fails due to server error.
     """
     # Ensure request is JSON and extract payload first
     if not request or not request.is_json:
@@ -268,16 +314,9 @@ def get_profile():
 
 
 @auth_bp.route('/users', methods=['GET'])
-@jwt_required()
+@check_permissions()
 def get_users():
-    """Admin is permitted to view list of all users"""
-    # Verify admin permissions
-    claims = get_jwt()  # dict with additional_claims
-    is_admin = claims.get("is_admin", False)
-
-    if not is_admin:
-        return jsonify({'error': 'Admin privileges required to view user list.'}), 403
-    
+    """Admin is permitted to view list of all users"""    
     users = User.query.all()
     user_list = [{"name": user.name, "is_admin": user.is_admin} for user in users]
     
