@@ -20,6 +20,7 @@ from src.url_parsers.url_type_handler import handle_url
 # from datetime import datetime, timezone
 from dotenv import load_dotenv
 import os
+from .s3 import clear_s3_bucket
 
 # `override=True` ensures edits to the .env file replace current os.environ values
 load_dotenv(override=True)
@@ -175,9 +176,9 @@ def RegistryReset():
         clear_s3_bucket()
     except Exception as e:
         logger.error(f"Error clearing S3 bucket during reset: {e}")
-        return jsonify({'description': 'Failed to reset the registry due to S3 error.'}), 500
+        return jsonify({'message': 'Failed to reset the registry due to S3 error.'}), 500
 
-    return jsonify({'description': 'Registry is reset.'}), 200
+    return jsonify({'message': 'Registry is reset.'}), 200
 
 
 @app.route('/artifacts/<artifact_type>/<id>', methods=['GET'])
@@ -245,41 +246,41 @@ def ArtifactDelete(artifact_type, id):
 @check_permissions("upload", "search")
 def ArtifactCreate(artifact_type):
     """Register a new artifact by providing a downloadable source URL. Artifacts may share a name with existing entries if their version differs.
-    Refer to the description above to see how an id is formed for an artifact.
+    Refer to the message above to see how an id is formed for an artifact.
     """
     try:
         logger.info(f"Creating new artifact of type {artifact_type}")
         data = request.get_json()
-        url = data.get("url")
+        url = data.get("url", None)
+        if url is None:
+            raise ValueError("Missing fields")
+        if Artifact.is_valid_hf_url(url) is False:
+            raise ValueError("Invalid Hugging Face URL")
         name = data.get("name", None)
-        if artifact_type == "model":
-            newArtifact = Model(url, name)
-        elif artifact_type == "dataset":
-            newArtifact = Dataset(url, name)
-        elif artifact_type == "code":
-            newArtifact = Code(url, name)
-        else:
+        if artifact_type not in ["model", "dataset", "code"]:
             return jsonify({'message': 'Invalid artifact_type.'}), 400
     except Exception as e:
         logger.error(f"Error creating artifact: {e}")
         return jsonify({'message': 'There is missing field(s) in the artifact_data or it is formed improperly (must include a single url)'}), 400
 
-    #TODO: route to PostgreSQL database later
-    artifact_db = Artifact(id = int(newArtifact.id), url=newArtifact.url, 
-                           type=newArtifact.type, 
-                           download_url=newArtifact.download_url,
-                           name=newArtifact.name)
+    artifact_db = Artifact(id = Artifact.make_id(), url=url, 
+                           type=artifact_type, 
+                           download_url="",
+                           name=name)
     
-    try:
-        db.session.add(artifact_db)
-        db.session.commit()
-    except Exception as e:
-        logger.error(f"Error saving artifact to database: {e}")
-        return jsonify({'message': 'Failed to save artifact to database.'}), 500
+    if artifact_db.ingestible:
+        try:
+            db.session.add(artifact_db)
+            db.session.commit()
+        except Exception as e:
+            logger.error(f"Error saving artifact to database: {e}")
+            return jsonify({'message': 'Failed to save artifact to database.'}), 500
+    else:
+        return jsonify({'message': 'Artifact is not registered due to the disqualified rating.'}), 424
     
     result = {}
-    result["metadata"] = newArtifact.metadata
-    result["data"] = {"url": newArtifact.url, "download_url": newArtifact.download_url}
+    result["metadata"] = {"id": artifact_db.id, "name": artifact_db.name, "type": artifact_db.type}
+    result["data"] = {"url": artifact_db.url, "download_url": artifact_db.download_url}
 
     return jsonify(result), 201
     
@@ -289,38 +290,37 @@ def ArtifactCreate(artifact_type):
 def ModelArtifactRate(id):
     """Get ratings for this model artifact. (BASELINE)."""
     
-    try:
-        to_evaluate = model_registry.get(id)
-    except Exception as e:
-        return jsonify({'description': 'There is missing field(s) in the artifact_id or it is formed improperly, or is invalid.'}), 400
-    if to_evaluate is None or to_evaluate.type != "model":
-        return jsonify({'description': 'Artifact does not exist.'}), 404
+    if id is None or not id.isdigit():
+        return jsonify({'message': 'There is missing field(s) in the artifact_id or it is formed improperly, or is invalid.'}), 400
+    
+    art = Artifact.query.filter_by(id=int(id)).first()
+    if art is None or art.type != "model":
+        return jsonify({'message': 'Artifact does not exist.'}), 404
 
-    if not to_evaluate.rate():
-        return jsonify({'description': 'The artifact rating system encountered an error while computing at least one metric.'}), 500
+    if not art.rate():
+        return jsonify({'message': 'The artifact rating system encountered an error while computing at least one metric.'}), 500
 
-    if not to_evaluate.check_ingestible():
+    if not art.check_ingestible():
         logger.error(f"Artifact {id} is not ingestible after rating.")
-        #return jsonify({'description': 'Artifact is not ingestible due to the disqualified rating.'}), 424
+        # return jsonify({'message': 'Artifact is not ingestible due to the disqualified rating.'}), 424
 
-    return jsonify(to_evaluate.ndjson), 200
+    return jsonify(art.ndjson), 200
 
 
 @app.route('/artifact/<artifact_type>/<id>/cost', methods=['GET'])
 @check_permissions("search")
 def get_artifact_artifact_type_id_cost(artifact_type, id):
     """Get the cost of an artifact (BASELINE)."""
-    if not authenticate():
-        return jsonify({'description': 'Authentication failed due to invalid or missing AuthenticationToken.'}), 403
     
     if artifact_type not in ["model", "dataset", "code"] or not id.isdigit():
-        return jsonify({'description': 'There is missing field(s) in the artifact_type or artifact_id or it is formed improperly, or is invalid.'}), 400
+        return jsonify({'message': 'There is missing field(s) in the artifact_type or artifact_id or it is formed improperly, or is invalid.'}), 400
     
-    if id not in model_registry:
-        return jsonify({'description': 'Artifact does not exist.'}), 404
+    art = Artifact.query.filter_by(id=int(id)).first()
+    if art is None or art.type != artifact_type:
+        return jsonify({'message': 'Artifact does not exist.'}), 404
     
     result = {}
-    result[id] = {"total_cost": model_registry[id].cost}
+    result[id] = {"total_cost": art.cost}
     return jsonify(result), 200
 
 
@@ -334,34 +334,34 @@ def ArtifactByNameGet(name):
 @app.route('/artifact/<artifact_type>/<id>/audit', methods=['GET'])
 @check_permissions("search")
 def ArtifactAuditGet(artifact_type, id):
-    """No description provided."""
+    """No message provided."""
     return jsonify({'message': 'Not implemented'}), 501
 
 
 @app.route('/artifact/model/<id>/lineage', methods=['GET'])
 @check_permissions("search")
 def ArtifactLineageGet(id):
-    """No description provided."""
+    """No message provided."""
     return jsonify({'message': 'Not implemented'}), 501
 
 
 @app.route('/artifact/model/<id>/license-check', methods=['POST'])
 @check_permissions("search")
 def ArtifactLicenseCheck(id):
-    """No description provided."""
+    """No message provided."""
     return jsonify({'message': 'Not implemented'}), 501
 
 
 @app.route('/artifact/byRegEx', methods=['POST'])
 @check_permissions("search")
 def ArtifactByRegExGet():
-    """No description provided."""
+    """No message provided."""
     return jsonify({'message': 'Not implemented'}), 501
 
 
 @app.route('/tracks', methods=['GET'])
 def get_tracks():
-    """No description provided."""
+    """No message provided."""
     try:
         return jsonify({"plannedTracks": plannedTracks}), 200
     except Exception as e:
