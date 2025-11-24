@@ -214,19 +214,55 @@ class TestArtifactCreateEndpoint(TestAPIEndpoints):
         data = json.loads(response.data)
         self.assertIn('message', data)
 
-    # @patch('src.api.app.authenticate', return_value=False)
-    # def test_create_model_authentication_failed(self, mock_auth):
-    #     """Test POST /artifact/model fails with invalid authentication"""
-    #     payload = {'url': 'https://huggingface.co/openai/whisper-tiny'}
+    def test_create_code_success(self):
+        """Test POST /artifact/code creates a new code artifact"""
+        test_url = "https://github.com/openai/whisper"
+        payload = {'name': 'whisper-code', 'url': test_url}
         
-    #     response = self.client.post(
-    #         '/artifact/model',
-    #         headers=self.headers,
-    #         data=json.dumps(payload)
-    #     )
+        response = self.client.post(
+            '/artifact/code',
+            headers=self.headers,
+            data=json.dumps(payload)
+        )
         
-    #     self.assertEqual(response.status_code, 403)
-
+        self.assertEqual(response.status_code, 201)
+        data = json.loads(response.data)
+        self.assertIn('metadata', data)
+        self.assertIn('data', data)
+        metadata = data['metadata']
+        self.assertIn('name', metadata)
+        self.assertIn('id', metadata)
+        self.assertIn('type', metadata)
+        self.assertEqual(metadata['name'], 'whisper-code')
+        self.assertEqual(metadata['type'], 'code')
+        with self.app.app_context():
+            self.assertIsNotNone(Artifact.query.filter_by(id=metadata['id']).first())
+        self.assertEqual(data['data']['download_url'], "")
+        
+    def test_create_dataset_success(self):
+        """Test POST /artifact/dataset creates a new dataset artifact"""
+        test_url = "https://huggingface.co/datasets/tensonaut/EPSTEIN_FILES_20K"
+        payload = {'name': 'whisper-dataset', 'url': test_url}
+        
+        response = self.client.post(
+            '/artifact/dataset',
+            headers=self.headers,
+            data=json.dumps(payload)
+        )
+        
+        self.assertEqual(response.status_code, 201)
+        data = json.loads(response.data)
+        self.assertIn('metadata', data)
+        self.assertIn('data', data)
+        metadata = data['metadata']
+        self.assertIn('name', metadata)
+        self.assertIn('id', metadata)
+        self.assertIn('type', metadata)
+        self.assertEqual(metadata['name'], 'whisper-dataset')
+        self.assertEqual(metadata['type'], 'dataset')
+        with self.app.app_context():
+            self.assertIsNotNone(Artifact.query.filter_by(id=metadata['id']).first())
+        self.assertEqual(data['data']['download_url'], "")
 
 class TestArtifactRetrieveEndpoint(TestAPIEndpoints):
     """Test /artifacts/{artifact_type}/{id} GET endpoint"""

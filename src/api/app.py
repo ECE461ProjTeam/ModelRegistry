@@ -254,14 +254,21 @@ def ArtifactCreate(artifact_type):
         url = data.get("url", None)
         if url is None:
             raise ValueError("Missing fields")
-        if Artifact.is_valid_hf_url(url) is False:
-            raise ValueError("Invalid Hugging Face URL")
         name = data.get("name", None)
         if artifact_type not in ["model", "dataset", "code"]:
             return jsonify({'message': 'Invalid artifact_type.'}), 400
     except Exception as e:
         logger.error(f"Error creating artifact: {e}")
         return jsonify({'message': 'There is missing field(s) in the artifact_data or it is formed improperly (must include a single url)'}), 400
+    
+    if artifact_type == "model" and Artifact.is_valid_hf_url(url) is False:
+            return jsonify({'message': 'The provided URL is not a valid Hugging Face model URL.'}), 400
+        
+    if artifact_type == "code" and Artifact.is_valid_git_url(url) is False:
+            return jsonify({'message': 'The provided URL is not a valid Git repository URL.'}), 400
+        
+    if artifact_type == "dataset" and Artifact.is_valid_url(url) is False:
+            return jsonify({'message': 'The provided URL is not a valid HTTP/HTTPS URL.'}), 400
 
     artifact_db = Artifact(id = Artifact.make_id(), url=url, 
                            type=artifact_type, 

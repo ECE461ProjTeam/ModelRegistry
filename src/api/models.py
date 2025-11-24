@@ -18,6 +18,7 @@ from datetime import datetime, timezone
 from src.logger import get_logger
 from ..url_parsers.url_type_handler import handle_url
 from ..cli.validate import validate_ndjson
+import requests
 
 logger = get_logger("api.models")
 
@@ -143,6 +144,16 @@ class Artifact(db.Model):
     def is_valid_hf_url(url: str) -> bool:
         """Check if the provided URL is a valid Hugging Face model URL."""
         return url.startswith("https://huggingface.co/") or url.startswith("http://huggingface.co/")
+    
+    @staticmethod
+    def is_valid_git_url(url: str) -> bool:
+        """Check if the provided URL is a valid Git repository URL."""
+        return url.startswith("git://") or url.startswith("https://github.com/") or url.startswith("http://github.com/")
+    
+    @staticmethod
+    def is_valid_url(url: str) -> bool:
+        """Check if the provided URL is a valid HTTP/HTTPS URL."""
+        return (url.startswith("http://") or url.startswith("https://")) and requests.get(url).status_code != 404
         
 
 class User(db.Model):

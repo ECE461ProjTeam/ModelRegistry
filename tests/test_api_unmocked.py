@@ -112,3 +112,17 @@ class TestRateEndpoint(TestAPIUnmocked):
         self.assertEqual(rate_response.status_code, 200)
         rate_data = json.loads(rate_response.data)
         self.assertIn('net_score', rate_data)
+        
+
+class TestResetEndpoint(TestAPIUnmocked):  
+    def test_reset_success_as_admin(self):
+            """Test DELETE /reset successfully resets registry as admin"""
+            # Reset the registry
+            response = self.client.delete('/reset', headers=self.headers)
+            
+            self.assertEqual(response.status_code, 200)
+            data = json.loads(response.data)
+            # app returns 'message' key for success responses
+            self.assertEqual(data.get('message'), 'Registry is reset.')
+            with self.app.app_context():
+                self.assertEqual(Artifact.query.count(), 0)
