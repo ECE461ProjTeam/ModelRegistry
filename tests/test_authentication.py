@@ -220,15 +220,15 @@ class TestPermissions(unittest.TestCase):
             db.session.commit()
 
         # Create an Artifact
-        with self.app.app_context():
-            artifact = Artifact(
-                type="model",
-                download_url="",
-                name="whisper-tiny",
-                url="https://huggingface.co/openai/whisper-tiny"
-            )
-            db.session.add(artifact)
-            db.session.commit()
+        test_url = "https://huggingface.co/openai/whisper-tiny"
+        payload = {'url': test_url}
+        response = self.client.post(
+                    '/artifact/model',
+                    headers=self.headers,
+                    data=json.dumps(payload)
+                )
+                
+        self.assertEqual(response.status_code, 201)
 
         # Authenticate as the user to get a token
         auth_payload = {"user": {"name": 'permuser'}, "secret": {"password": 'permpw'}}
