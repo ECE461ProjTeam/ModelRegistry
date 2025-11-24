@@ -523,7 +523,7 @@ class TestEdgeCases(TestAPIEndpoints):
         self.assertEqual(response.status_code, 404)
 
 class TestSearchByName(TestAPIEndpoints):
-    """Test /artifact/searchByName POST endpoint"""
+    """Test /artifact/byName/<name> GET endpoint"""
 
     def test_search_by_name_success(self):
         """Test POST /artifact/searchByName finds artifacts by name pattern"""
@@ -553,6 +553,7 @@ class TestSearchByName(TestAPIEndpoints):
         self.assertEqual(len(data), 1)
 
     def test_search_all(self):
+        """Test GET /artifact/byName/* returns all artifacts (wildcard search)."""
         urls = [
             "https://huggingface.co/openai/whisper-tiny",
             "https://huggingface.co/openai/whisper-base",
@@ -576,7 +577,7 @@ class TestSearchByName(TestAPIEndpoints):
         self.assertGreaterEqual(len(data), 3)
 
     def test_search_by_name_no_matches(self):
-        """Test POST /artifact/searchByName returns empty list when no matches"""
+        """Test GET /artifact/byName returns 404 when no matches"""
         urls = [
             "https://huggingface.co/openai/whisper-tiny",
             "https://huggingface.co/openai/whisper-base",

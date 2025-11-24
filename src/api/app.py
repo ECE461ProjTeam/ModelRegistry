@@ -22,7 +22,6 @@ from dotenv import load_dotenv
 import os
 import re
 from sqlalchemy import event
-from .extensions import db
 from .byRegex import regex_bp
 
 # `override=True` ensures edits to the .env file replace current os.environ values
@@ -250,13 +249,14 @@ def ArtifactDelete(artifact_type, id):
     if artifact_type not in ["model", "dataset", "code"] or not id.isdigit():
         return jsonify({'message': 'There is missing field(s) in the artifact_type or artifact_id or invalid.'}), 400
     
-    if not Artifact.query.filter_by(id=int(id)).first():
+    artifact = Artifact.query.filter_by(id=int(id), type=artifact_type).first()
+    if not artifact:
         return jsonify({'message': 'Artifact does not exist.'}), 404
 
-    Artifact.query.filter_by(id=(int(id))).delete()
+    db.session.delete(artifact)
     db.session.commit()
 
-    if Artifact.query.filter_by(id=int(id)).first():
+    if Artifact.query.filter_by(id=int(id), type=artifact_type).first():
         return jsonify({'message': 'Deletion failed.'}), 500
     
     return jsonify({'message': 'Artifact is deleted.'}), 200
