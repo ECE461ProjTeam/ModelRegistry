@@ -52,6 +52,9 @@ def check_permissions(*required_permissions):
         @check_permissions("permission1", "permission2")
         def protected_route():
             ...
+    Returns:
+        200 OK: If the user has the required permissions.
+        401 Unauthorized: If the user lacks required permissions.
     """
     def decorator(fn):
         @jwt_required()
@@ -64,7 +67,7 @@ def check_permissions(*required_permissions):
             # If no permissions are defined, admin-only access
             if not required_permissions:
                 if not is_admin:
-                    return jsonify({'message': 'Admin-access only.'}), 401
+                    return jsonify({'error': 'Admin-access only.'}), 401
                 return fn(*args, **kwargs)
 
             # Admins automatically bypass permission checks
@@ -75,7 +78,7 @@ def check_permissions(*required_permissions):
             missing = [p for p in required_permissions if p not in permissions]
             if missing:
                 return jsonify({
-                    'message': f'You do not have all required permissions. Missing {missing}.'
+                    'error': f'You do not have all required permissions. Missing {missing}.'
                 }), 401
 
             return fn(*args, **kwargs)
@@ -154,7 +157,7 @@ def authenticate():
 
 
 @auth_bp.route('/register', methods=['POST'])
-@jwt_required()
+@check_permissions()
 def register():
     """
     Register a new user. Only an admin can register new users.
@@ -177,13 +180,6 @@ def register():
     # Check if request is JSON
     if not request or not request.is_json:
         return jsonify({'error': 'Invalid request format.'}), 400
-
-     # Verify admin permissions
-    claims = get_jwt()  # dict with additional_claims
-    is_admin = claims.get("is_admin", False)
-
-    if not is_admin:
-        return jsonify({'error': 'Admin privileges required to register new users.'}), 403
     
     # Extract new user information from the request
     user = request.json.get("user")
