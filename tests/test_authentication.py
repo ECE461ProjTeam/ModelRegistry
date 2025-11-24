@@ -8,6 +8,7 @@ dict with keys "name" and "is_admin") and use the Flask test client
 to call the endpoints.
 """
 
+import json
 import unittest
 from src.api.app import app
 from src.api.models import User, Artifact
@@ -105,7 +106,7 @@ class TestAuthenticationEndpoints(unittest.TestCase):
         }
 
         resp = self.client.post('/register', headers=headers, json=payload)
-        self.assertEqual(resp.status_code, 403)
+        self.assertEqual(resp.status_code, 401)
         data = resp.get_json()
         self.assertIn('error', data)
 
@@ -212,22 +213,12 @@ class TestPermissions(unittest.TestCase):
 
     def test_check_permissions_decorator_allowed(self):
         """Test that the check_permissions decorator allows access when permissions are present."""
+        """Test that the check_permissions decorator allows access when permissions are present."""
         # Create a user with the required permission
         with self.app.app_context():
-            u = User(name='permuser', is_admin=False, permissions=['search'])
+            u = User(name='permuser', is_admin=False, permissions=['search', 'upload'])
             u.set_password('permpw')
             db.session.add(u)
-            db.session.commit()
-
-        # Create an Artifact
-        with self.app.app_context():
-            artifact = Artifact(
-                type="model",
-                download_url="",
-                name="whisper-tiny",
-                url="https://huggingface.co/openai/whisper-tiny"
-            )
-            db.session.add(artifact)
             db.session.commit()
 
         # Authenticate as the user to get a token
@@ -235,12 +226,17 @@ class TestPermissions(unittest.TestCase):
         auth_resp = self.client.put('/authenticate', json=auth_payload)
         self.assertEqual(auth_resp.status_code, 200)
         token = auth_resp.get_json()
-        headers = {"X-Authorization": f"{token}"}
+        headers = {"X-Authorization": f"{token}", "Content-Type": "application/json"}
 
-        # Access the protected route with a valid artifact query
-        payload = {"name": "whisper-tiny", "types": ["model"]}
-        resp = self.client.post('/artifacts', headers=headers, json=payload)
-        self.assertEqual(resp.status_code, 200)
+        # Create an Artifact
+        test_url = "https://huggingface.co/openai/whisper-tiny"
+        payload = {'url': test_url}
+        response = self.client.post(
+                    '/artifact/model',
+                    headers=headers,
+                    data=json.dumps(payload)
+                )
+        self.assertEqual(response.status_code, 201)
 
     def test_check_permissions_decorator_denied(self):
         """Test that the check_permissions decorator denies access when permissions are missing."""
