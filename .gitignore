@@ -12,6 +12,8 @@ reports/
 dev_env.py
 .pytest_cache/
 instance/
+local_test.sh
+remote_test.sh
 
 ## FRONTEND
 # Logs
