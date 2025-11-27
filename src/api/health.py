@@ -11,6 +11,7 @@ from flask import Blueprint, request, jsonify
 from .config import Config, TestConfig
 from datetime import datetime, timedelta, timezone
 from .auth import check_permissions
+from src.logger import get_logger
 import os
 import boto3
 import psycopg2
@@ -18,20 +19,26 @@ import psycopg2
 # Blueprint setup
 health_bp = Blueprint("health_bp", __name__)
 config = TestConfig if os.environ.get("DEBUG") == "True" else Config
-from src.logger import get_logger
 logger = get_logger("api.health")
 
+# AWS Configuration
+AWS_REGION = os.environ.get("AWS_REGION", "us-east-2")
+
+# AWS Components
+ELASTIC_BEANSTALK_ENV_NAME = os.environ.get("ELASTIC_BEANSTALK_ENV_NAME")
+S3_INGESTION_BUCKET = os.environ.get("BUCKET_NAME")
+DB_CLUSTER_IDENTIFIER = os.environ.get("DB_CLUSTER_IDENTIFIER")
+CLOUDWATCH_LOG_GROUP = os.environ.get("CLOUDWATCH_LOG_GROUP")
+
 # AWS Clients
-cloudwatch = boto3.client("cloudwatch", region_name=config.AWS_REGION)
-logs_client = boto3.client("logs", region_name=config.AWS_REGION)
-elb_client = boto3.client("elbv2", region_name=config.AWS_REGION)
-eb_client = boto3.client("elasticbeanstalk", region_name=config.AWS_REGION)
-ec2_client = boto3.client("ec2", region_name=config.AWS_REGION)
-s3_client = boto3.client("s3", region_name=config.AWS_REGION)
-rds_client = boto3.client("rds", region_name=config.AWS_REGION)
+cloudwatch = boto3.client("cloudwatch", region_name=AWS_REGION)
+logs_client = boto3.client("logs", region_name=AWS_REGION)
+eb_client = boto3.client("elasticbeanstalk", region_name=AWS_REGION)
+s3_client = boto3.client("s3", region_name=AWS_REGION)
 
 GRANULARITY = 60  # 1 minute granularity for metrics, meaning that data points are aggregated over 1 minute intervals
 
+# Health Check Route
 @health_bp.route('/health', methods=['GET'])
 def health():
     """
@@ -41,7 +48,7 @@ def health():
     """
     return jsonify({'message': 'Service reachable.', "timestamp": datetime.now(timezone.utc).isoformat()}), 200
 
-# AWS Helpter functions to fetch metrics and logs
+# AWS Helper functions to fetch metrics and logs
 def fetch_eb_env_resource() -> dict:
     '''
     Fetch Elastic Beanstalk environment resources.
@@ -50,9 +57,9 @@ def fetch_eb_env_resource() -> dict:
     '''
     try:
         response = eb_client.describe_environment_resources(
-            EnvironmentName=config.ELASTIC_BEANSTALK_ENV_NAME
+            EnvironmentName=ELASTIC_BEANSTALK_ENV_NAME
         )
-        logger.info(f"EB Environment Resources: {response}")
+        logger.debug(f"EB Environment Resources: {response}")
         return response["EnvironmentResources"]
     except Exception as e:
         logger.error(f"EB fetch error: {e}")
@@ -72,10 +79,10 @@ def fetch_ec2_metrics(instance_ids: list, window: datetime, include_timeline: bo
         - CPUUtilization: List of datapoints with timestamps and average CPU utilization.
     '''
     components = []
-    # For each instance, fetch CPUUtilization metric from CloudWatch
+    # For each instance, fetch CPUUtilization metric from CloudWatch.
     for instance_id in instance_ids:
         try:
-            logger.info(f"Fetching CPUUtilization for instance: {instance_id}")
+            logger.debug(f"Fetching CPUUtilization for instance: {instance_id}")
             result = cloudwatch.get_metric_statistics(
                 Namespace="AWS/EC2",
                 MetricName='CPUUtilization',
@@ -86,7 +93,7 @@ def fetch_ec2_metrics(instance_ids: list, window: datetime, include_timeline: bo
                 Statistics=['Average']
             )
             observered_at = datetime.now(timezone.utc).isoformat()
-            logger.info(f"CPUUtilization data points for instance {instance_id}: {result.get('Datapoints', [])}")
+            logger.debug(f"CPUUtilization data points for instance {instance_id}: {result.get('Datapoints', [])}")
             
             # Using the fetched data, calculate overall status (e.g., OK if avg CPU < 70%, Warning if 70-90%, Critical if > 90%)
             avg_cpu = 0
@@ -132,6 +139,7 @@ def fetch_db_metrics(window: datetime, include_timeline: bool = False) -> list:
         include_timeline (bool): Whether to include timeline data. Default is False.
     Returns:
         RDS component containing the following metrics:
+        - Connectivity: connected / error message
         - CPUUtilization
         - WriteLatency: Average
     '''
@@ -163,7 +171,7 @@ def fetch_db_metrics(window: datetime, include_timeline: bool = False) -> list:
         cpu_result = cloudwatch.get_metric_statistics(
             Namespace="AWS/RDS",
             MetricName='CPUUtilization',
-            Dimensions=[{'Name': 'DBClusterIdentifier', 'Value': config.DB_CLUSTER_IDENTIFIER}],
+            Dimensions=[{'Name': 'DBClusterIdentifier', 'Value': DB_CLUSTER_IDENTIFIER}],
             StartTime=window,
             EndTime=datetime.now(timezone.utc),
             Period=GRANULARITY,
@@ -172,15 +180,15 @@ def fetch_db_metrics(window: datetime, include_timeline: bool = False) -> list:
         write_latency_result = cloudwatch.get_metric_statistics(
             Namespace="AWS/RDS",
             MetricName='WriteLatency',
-            Dimensions=[{'Name': 'DBClusterIdentifier', 'Value': config.DB_CLUSTER_IDENTIFIER}],
+            Dimensions=[{'Name': 'DBClusterIdentifier', 'Value': DB_CLUSTER_IDENTIFIER}],
             StartTime=window,
             EndTime=datetime.now(timezone.utc),
             Period=GRANULARITY,
             Statistics=['Average']
         )
         observered_at = datetime.now(timezone.utc).isoformat()
-        logger.info(f"RDS CPUUtilization data points: {cpu_result.get('Datapoints', [])}")
-        logger.info(f"RDS WriteLatency data points: {write_latency_result.get('Datapoints', [])}")
+        logger.debug(f"RDS CPUUtilization data points: {cpu_result.get('Datapoints', [])}")
+        logger.debug(f"RDS WriteLatency data points: {write_latency_result.get('Datapoints', [])}")
 
         avg_cpu = 0
         if cpu_result.get("Datapoints"):
@@ -193,7 +201,7 @@ def fetch_db_metrics(window: datetime, include_timeline: bool = False) -> list:
 
         rds_metrics = {
             "display_name": f"Aurora Serverless DB Cluster",
-            "id": config.DB_CLUSTER_IDENTIFIER,
+            "id": DB_CLUSTER_IDENTIFIER,
             "status": status,
             "observed_at": observered_at,
             "metrics": {
@@ -211,7 +219,7 @@ def fetch_db_metrics(window: datetime, include_timeline: bool = False) -> list:
         logger.error(f"RDS metric error: {e}")
         rds_metrics = {
             "display_name": "Aurora Serverless DB Cluster",
-            "id": config.DB_CLUSTER_IDENTIFIER,
+            "id": DB_CLUSTER_IDENTIFIER,
             "status": "Critical" if connectivity != "connected" else "OK",
             "observed_at": datetime.now(timezone.utc).isoformat(),
             "metrics": {"Connectivity": connectivity, "CPUUtilization": 0, "WriteLatency": 0},
@@ -236,7 +244,7 @@ def fetch_alb_metrics(load_balancer_arns: list, window: datetime, include_timeli
     components = []
     for alb_arn in load_balancer_arns:
         try:
-            logger.info(f"Fetching ALB metrics for: {alb_arn}")
+            logger.debug(f"Fetching ALB metrics for: {alb_arn}")
             # Extract ALB name in correct CloudWatch format (app/<name>/<id>)
             alb_name = alb_arn.split(":")[-1].replace("loadbalancer/", "")
             request_count_result = cloudwatch.get_metric_statistics(
@@ -258,8 +266,8 @@ def fetch_alb_metrics(load_balancer_arns: list, window: datetime, include_timeli
                 Statistics=['Average']
             )
             observered_at = datetime.now(timezone.utc).isoformat()
-            logger.info(f"ALB RequestCount data points for {alb_arn}: {request_count_result.get('Datapoints', [])}")
-            logger.info(f"ALB TargetResponseTime data points for {alb_arn}: {response_time_result.get('Datapoints', [])}")
+            logger.debug(f"ALB RequestCount data points for {alb_arn}: {request_count_result.get('Datapoints', [])}")
+            logger.debug(f"ALB TargetResponseTime data points for {alb_arn}: {response_time_result.get('Datapoints', [])}")
 
             avg_request_count = (sum(dp["Sum"] for dp in request_count_result.get("Datapoints", [])) / len(request_count_result["Datapoints"])
                                  if request_count_result.get("Datapoints") else None)
@@ -316,23 +324,23 @@ def fetch_eb_metrics(window: datetime) -> list:
     components = []
     try:
         response = eb_client.describe_environment_health(
-            EnvironmentName=config.ELASTIC_BEANSTALK_ENV_NAME,
+            EnvironmentName=ELASTIC_BEANSTALK_ENV_NAME,
             AttributeNames=['All']
         )
-        logger.info(f"EB Environment Health: {response}")
+        logger.debug(f"EB Environment Health: {response}")
 
         # Fetch recent events
         events_response = eb_client.describe_events(
-            EnvironmentName=config.ELASTIC_BEANSTALK_ENV_NAME,
+            EnvironmentName=ELASTIC_BEANSTALK_ENV_NAME,
             StartTime=window,
             EndTime=datetime.now(timezone.utc),
             MaxRecords=50,
         )
         events = events_response.get("Events", [])
-        logger.info(f"EB Environment Events: {events}")
+        logger.debug(f"EB Environment Events: {events}")
 
         eb_metrics = {
-            "id": config.ELASTIC_BEANSTALK_ENV_NAME,
+            "id": ELASTIC_BEANSTALK_ENV_NAME,
             "display_name": f"Elastic Beanstalk Environment Health",
             "status": response.get("Status", "Unknown"),
             "observed_at": datetime.now(timezone.utc).isoformat(),
@@ -345,7 +353,7 @@ def fetch_eb_metrics(window: datetime) -> list:
     except Exception as e:
         logger.error(f"EB metric error: {e}")
         components.append({
-            "id": config.ELASTIC_BEANSTALK_ENV_NAME,
+            "id": ELASTIC_BEANSTALK_ENV_NAME,
             "display_name": "Elastic Beanstalk Environment Health",
             "status": "Unknown",
             "observed_at": datetime.now(timezone.utc).isoformat(),
@@ -359,28 +367,32 @@ def fetch_s3_metrics() -> list:
     '''
     Fetch S3 bucket metrics from CloudWatch within the given time window.
     Only for the following buckets:
-        - config.S3_INGESTION_BUCKET
+        - BUCKET_NAME
     Returns:
         S3 component containing the following metrics:
         - NumberOfObjects
         - BucketSizeBytes: Average
     '''
     components = []
-    bucket_name = config.S3_INGESTION_BUCKET
+    bucket_name = S3_INGESTION_BUCKET
     try:
-        # Count objects in bucket
-        response = s3_client.list_objects_v2(Bucket=bucket_name)
-        num_objects = response.get("KeyCount", 0)
+        paginator = s3_client.get_paginator('list_objects_v2')
+        page_iterator = paginator.paginate(Bucket=bucket_name)
 
-        # Get total bucket size (approximate, using HeadBucket)
+        num_objects = 0
         bucket_size = 0
-        for obj in response.get("Contents", []):
-            bucket_size += obj.get("Size", 0)
+        for page in page_iterator:
+            contents = page.get('Contents', [])
+            num_objects += len(contents)
+            for obj in contents:
+                bucket_size += obj.get('Size', 0)
+
+        status = "OK" if num_objects > 0 else "Empty"
 
         s3_metrics = {
             "id": bucket_name,
             "display_name": "Model Ingestion S3 Bucket",
-            "status": "OK",
+            "status": status,
             "observed_at": datetime.now(timezone.utc).isoformat(),
             "metrics": {
                 "NumberOfObjects": num_objects,
@@ -418,9 +430,9 @@ def fetch_application_logs(window: datetime) -> list:
     }
     '''
     components = []
-    log_group = config.CLOUDWATCH_LOG_GROUP
+    log_group = CLOUDWATCH_LOG_GROUP
     try:
-        logger.info(f"Fetching application logs from log group: {log_group}")
+        logger.debug(f"Fetching application logs from log group: {log_group}")
         response = logs_client.filter_log_events(
             logGroupName=log_group,
             startTime=int(window.timestamp() * 1000),
@@ -430,7 +442,7 @@ def fetch_application_logs(window: datetime) -> list:
         events = response.get("events", [])
         # Remove keys such as eventId, ingestionTime, logStreamName from each log event
         cleaned_events = [{"message": event.get("message", ""), "timestamp": event.get("timestamp", 0)} for event in events]
-        logger.info(f"Fetched {len(cleaned_events)} log events from {log_group}")
+        logger.debug(f"Fetched {len(cleaned_events)} log events from {log_group}")
 
         app_logs = {
             "id": log_group,
@@ -454,7 +466,7 @@ def fetch_application_logs(window: datetime) -> list:
 
 # API Route to get system health components
 @health_bp.route('/health/components', methods=['GET'])
-# @check_permissions()
+@check_permissions()
 def system_health_components():
     """
     Return health status of various system components.
@@ -475,24 +487,26 @@ def system_health_components():
     Returns:
         200 OK: If health status retrieval is successful.
         400 Bad Request: If the request format is invalid.
+        401 Unauthorized: If authentication fails.
+        403 Forbidden: If the user lacks necessary permissions.
     """
-    # Check if request is JSON
-    if not request or not request.is_json:
-        return jsonify({'error': 'Invalid request format.'}), 400
-    
-    # Access request data
-    req_data = request.get_json() or {}
+    # Access JSON if sent
+    req_data = request.get_json(silent=True) or {}
 
+    # Validate allowed keys
+    allowed_keys = {"windowMinutes", "includeTimeline"}
+    if any(key not in allowed_keys for key in req_data.keys()):
+        return jsonify({"message": "Invalid request format."}), 400
+
+    # Get values with defaults
     window_minutes = int(req_data.get("windowMinutes", 60))
     include_timeline = req_data.get("includeTimeline", False)
 
     window = datetime.now(timezone.utc) - timedelta(minutes=window_minutes)
 
-    # Build components
     components = []
 
-    # Fetch component data (use threading or async if needed for performance)
-    # 1. Fetch Elastic Beanstalk ENvironment Resources to get instance IDs
+    # 1. Fetch Elastic Beanstalk Environment Resources to get instance IDs
     eb_resources = fetch_eb_env_resource()
     instance_ids = [inst["Id"] for inst in eb_resources.get("Instances", [])] if eb_resources else []
     load_balancer_arns = [lb["Name"] for lb in eb_resources.get("LoadBalancers", [])] if eb_resources else []
@@ -500,33 +514,59 @@ def system_health_components():
 
     # 1. Elastic Beanstalk Metrics
     eb_metrics = fetch_eb_metrics(window)
-    logger.info("Fetched EB health component")
+    logger.debug("Fetched EB health component")
     components.extend(eb_metrics if eb_metrics else [])
     
     # 2. EC2 Metrics
-    ec2_metrics = fetch_ec2_metrics(instance_ids, window, include_timeline)
-    logger.info("Fetched EC2 data component")
-    components.extend(ec2_metrics if ec2_metrics else [])
+    if instance_ids:
+        ec2_metrics = fetch_ec2_metrics(instance_ids, window, include_timeline)
+        logger.debug("Fetched EC2 data component")
+        components.extend(ec2_metrics if ec2_metrics else [])
+    else:
+        logger.warning("No EC2 instances found in EB environment; skipping EC2 metrics fetch.")
+        ec2_metrics = {
+                "id": "UNKNOWN",
+                "display_name": "EC2 Instance UNKNOWN - No Instances Found",
+                "status": "Unknown",
+                "observed_at": datetime.now(timezone.utc).isoformat(),
+                "metrics": {"CPUUtilization": 0},
+                "timeline": {}
+            }
+        components.append(ec2_metrics)
+        
     
     # 3. Aurora Serverlessv2 Database Connectivity + Metrics
     db_metrics = fetch_db_metrics(window, include_timeline)
-    logger.info("Fetched Database connectivity component")
+    logger.debug("Fetched Database connectivity component")
     components.extend(db_metrics if db_metrics else [])
 
     # 4. S3 Metrics
     s3_metrics = fetch_s3_metrics()
-    logger.info("Fetched S3 data component")
+    logger.debug("Fetched S3 data component")
     components.extend(s3_metrics if s3_metrics else [])
 
     # 5. ALB Metrics
-    alb_metrics = fetch_alb_metrics(load_balancer_arns, window, include_timeline)
-    logger.info("Fetched ALB data component")
-    components.extend(alb_metrics if alb_metrics else [])
+    if load_balancer_arns:
+        alb_metrics = fetch_alb_metrics(load_balancer_arns, window, include_timeline)
+        logger.debug("Fetched ALB data component")
+        components.extend(alb_metrics if alb_metrics else [])
+    else:
+        logger.warning("No Load Balancers found in EB environment; skipping ALB metrics fetch.")
+        alb_metrics = {
+                "id": "UNKNOWN",
+                "display_name": "Application Load Balancer UNKNOWN - No Load Balancers Found",
+                "status": "Unknown",
+                "observed_at": datetime.now(timezone.utc).isoformat(),
+                "metrics": {"RequestCount": 0, "TargetResponseTime": 0},
+                "timeline": {}
+            }
+        components.append(alb_metrics)
 
-    # 6. Application Logs
-    app_logs = fetch_application_logs(window)
-    logger.info("Fetched Application Logs component")
-    components.extend(app_logs if app_logs else [])
+    # 6. Application Logs - only if requested
+    if include_timeline:
+        app_logs = fetch_application_logs(window)
+        logger.debug("Fetched Application Logs component")
+        components.extend(app_logs if app_logs else [])
 
     # Build response
     response = {

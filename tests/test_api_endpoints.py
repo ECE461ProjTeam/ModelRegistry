@@ -521,6 +521,54 @@ class TestEdgeCases(TestAPIEndpoints):
         self.assertEqual(response.status_code, 404)
 
 
+class TestSystemHealth(TestAPIEndpoints):
+    """Test /health and /health/components endpoints"""
+
+    def test_health_check_success(self):
+        """Test GET /health returns service reachable"""
+        response = self.client.get('/health', headers=self.headers)
+        
+        self.assertEqual(response.status_code, 200)
+        data = json.loads(response.data)
+        self.assertIn('message', data)
+        self.assertEqual(data['message'], 'Service reachable.')
+        self.assertIn('timestamp', data)
+    
+    def test_health_components_success(self):
+        """Test GET /health/components returns health components with valid auth"""
+        payload = {'includeTimeline': 'true', 'windowMinutes': '60'}
+        response = self.client.get('/health/components', headers=self.headers, data=json.dumps(payload))
+        
+        self.assertEqual(response.status_code, 200)
+        data = json.loads(response.data)
+        self.assertIn('components', data)
+        self.assertIsInstance(data['components'], list)
+
+    def test_health_components_empty_payload(self):
+        """Test GET /health/components with empty payload returns default components"""
+        response = self.client.get('/health/components', headers=self.headers)
+        
+        self.assertEqual(response.status_code, 200)
+        data = json.loads(response.data)
+        self.assertIn('components', data)
+        self.assertIsInstance(data['components'], list)
+
+    def test_health_components_invalid_payload(self):
+        """Test GET /health/components with invalid payload returns 400"""
+        payload = {'invalid_key': 'value'}
+        response = self.client.get('/health/components', headers=self.headers, data=json.dumps(payload))
+        
+        self.assertEqual(response.status_code, 400)
+        data = json.loads(response.data)
+        self.assertIn('message', data)
+    
+    def test_health_components_authentication_failed(self):
+        """Test GET /health/components fails with invalid authentication"""
+        # call without auth headers to simulate unauthenticated request
+        response = self.client.get('/health/components')
+        self.assertEqual(response.status_code, 401)
+
+
 def suite():
     """Create test suite"""
     test_suite = unittest.TestSuite()
@@ -531,6 +579,7 @@ def suite():
     test_suite.addTest(unittest.makeSuite(TestArtifactUpdateEndpoint))
     test_suite.addTest(unittest.makeSuite(TestArtifactsListEndpoint))
     test_suite.addTest(unittest.makeSuite(TestEdgeCases))
+    test_suite.addTest(unittest.makeSuite(TestSystemHealth))
     return test_suite
 
 
