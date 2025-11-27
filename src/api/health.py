@@ -506,7 +506,7 @@ def system_health_components():
 
     components = []
 
-    # 1. Fetch Elastic Beanstalk Environment Resources to get instance IDs
+    # 0. Fetch Elastic Beanstalk Environment Resources to get instance IDs
     eb_resources = fetch_eb_env_resource()
     instance_ids = [inst["Id"] for inst in eb_resources.get("Instances", [])] if eb_resources else []
     load_balancer_arns = [lb["Name"] for lb in eb_resources.get("LoadBalancers", [])] if eb_resources else []
