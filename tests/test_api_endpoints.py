@@ -536,16 +536,15 @@ class TestSystemHealth(TestAPIEndpoints):
     
     def test_health_components_success(self):
         """Test GET /health/components returns health components with valid auth"""
-        payload = {'includeTimeline': 'true', 'windowMinutes': '60'}
-        response = self.client.get('/health/components', headers=self.headers, data=json.dumps(payload))
+        response = self.client.get('/health/components', headers=self.headers, query_string={'windowMinutes': 60, 'includeTimeline': 'true'})
         
         self.assertEqual(response.status_code, 200)
         data = json.loads(response.data)
         self.assertIn('components', data)
         self.assertIsInstance(data['components'], list)
 
-    def test_health_components_empty_payload(self):
-        """Test GET /health/components with empty payload returns default components"""
+    def test_health_components_empty_query(self):
+        """Test GET /health/components with empty query params returns default components"""
         response = self.client.get('/health/components', headers=self.headers)
         
         self.assertEqual(response.status_code, 200)
@@ -553,10 +552,9 @@ class TestSystemHealth(TestAPIEndpoints):
         self.assertIn('components', data)
         self.assertIsInstance(data['components'], list)
 
-    def test_health_components_invalid_payload(self):
-        """Test GET /health/components with invalid payload returns 400"""
-        payload = {'invalid_key': 'value'}
-        response = self.client.get('/health/components', headers=self.headers, data=json.dumps(payload))
+    def test_health_components_invalid_query(self):
+        """Test GET /health/components with invalid query params returns 400"""
+        response = self.client.get('/health/components', headers=self.headers, query_string={'invalid_key': 'value'})
         
         self.assertEqual(response.status_code, 400)
         data = json.loads(response.data)

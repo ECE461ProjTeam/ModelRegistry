@@ -30,12 +30,6 @@ S3_INGESTION_BUCKET = os.environ.get("BUCKET_NAME")
 DB_CLUSTER_IDENTIFIER = os.environ.get("DB_CLUSTER_IDENTIFIER")
 CLOUDWATCH_LOG_GROUP = os.environ.get("CLOUDWATCH_LOG_GROUP")
 
-# AWS Clients
-cloudwatch = boto3.client("cloudwatch", region_name=AWS_REGION)
-logs_client = boto3.client("logs", region_name=AWS_REGION)
-eb_client = boto3.client("elasticbeanstalk", region_name=AWS_REGION)
-s3_client = boto3.client("s3", region_name=AWS_REGION)
-
 GRANULARITY = 60  # 1 minute granularity for metrics, meaning that data points are aggregated over 1 minute intervals
 
 # Health Check Route
@@ -56,6 +50,7 @@ def fetch_eb_env_resource() -> dict:
         EnvironmentResources dict from EB describe_environment_resources API.
     '''
     try:
+        eb_client = boto3.client("elasticbeanstalk", region_name=AWS_REGION)
         response = eb_client.describe_environment_resources(
             EnvironmentName=ELASTIC_BEANSTALK_ENV_NAME
         )
@@ -82,6 +77,7 @@ def fetch_ec2_metrics(instance_ids: list, window: datetime, include_timeline: bo
     # For each instance, fetch CPUUtilization metric from CloudWatch.
     for instance_id in instance_ids:
         try:
+            cloudwatch = boto3.client("cloudwatch", region_name=AWS_REGION)
             logger.debug(f"Fetching CPUUtilization for instance: {instance_id}")
             result = cloudwatch.get_metric_statistics(
                 Namespace="AWS/EC2",
@@ -92,7 +88,7 @@ def fetch_ec2_metrics(instance_ids: list, window: datetime, include_timeline: bo
                 Period=GRANULARITY,
                 Statistics=['Average']
             )
-            observered_at = datetime.now(timezone.utc).isoformat()
+            observed_at = datetime.now(timezone.utc).isoformat()
             logger.debug(f"CPUUtilization data points for instance {instance_id}: {result.get('Datapoints', [])}")
             
             # Using the fetched data, calculate overall status (e.g., OK if avg CPU < 70%, Warning if 70-90%, Critical if > 90%)
@@ -110,11 +106,11 @@ def fetch_ec2_metrics(instance_ids: list, window: datetime, include_timeline: bo
                 "id": instance_id,
                 "display_name": f"EC2 Instance {instance_id}",
                 "status": status,
-                "observed_at": observered_at,
+                "observed_at": observed_at,
                 "metrics": {
                     "CPUUtilization": avg_cpu
                 },
-                "timeline": result.get("Datapoints", []) if include_timeline else []
+                "timeline": {"CPUUtilization": result.get("Datapoints", [])} if include_timeline else {}
             }
             components.append(ec2_metrics)
         except Exception as e:
@@ -128,7 +124,6 @@ def fetch_ec2_metrics(instance_ids: list, window: datetime, include_timeline: bo
                 "timeline": {}
             }
             components.append(ec2_metrics)
-            continue
     return components
 
 def fetch_db_metrics(window: datetime, include_timeline: bool = False) -> list:
@@ -168,6 +163,7 @@ def fetch_db_metrics(window: datetime, include_timeline: bool = False) -> list:
     
     # 2. Fetch RDS Metrics from CloudWatch (If using Aurora Serverlessv2)
     try:
+        cloudwatch = boto3.client("cloudwatch", region_name=AWS_REGION)
         cpu_result = cloudwatch.get_metric_statistics(
             Namespace="AWS/RDS",
             MetricName='CPUUtilization',
@@ -186,7 +182,7 @@ def fetch_db_metrics(window: datetime, include_timeline: bool = False) -> list:
             Period=GRANULARITY,
             Statistics=['Average']
         )
-        observered_at = datetime.now(timezone.utc).isoformat()
+        observed_at = datetime.now(timezone.utc).isoformat()
         logger.debug(f"RDS CPUUtilization data points: {cpu_result.get('Datapoints', [])}")
         logger.debug(f"RDS WriteLatency data points: {write_latency_result.get('Datapoints', [])}")
 
@@ -203,7 +199,7 @@ def fetch_db_metrics(window: datetime, include_timeline: bool = False) -> list:
             "display_name": f"Aurora Serverless DB Cluster",
             "id": DB_CLUSTER_IDENTIFIER,
             "status": status,
-            "observed_at": observered_at,
+            "observed_at": observed_at,
             "metrics": {
                 "Connectivity": connectivity,
                 "CPUUtilization": avg_cpu,
@@ -244,6 +240,7 @@ def fetch_alb_metrics(load_balancer_arns: list, window: datetime, include_timeli
     components = []
     for alb_arn in load_balancer_arns:
         try:
+            cloudwatch = boto3.client("cloudwatch", region_name=AWS_REGION)
             logger.debug(f"Fetching ALB metrics for: {alb_arn}")
             # Extract ALB name in correct CloudWatch format (app/<name>/<id>)
             alb_name = alb_arn.split(":")[-1].replace("loadbalancer/", "")
@@ -265,7 +262,7 @@ def fetch_alb_metrics(load_balancer_arns: list, window: datetime, include_timeli
                 Period=GRANULARITY,
                 Statistics=['Average']
             )
-            observered_at = datetime.now(timezone.utc).isoformat()
+            observed_at = datetime.now(timezone.utc).isoformat()
             logger.debug(f"ALB RequestCount data points for {alb_arn}: {request_count_result.get('Datapoints', [])}")
             logger.debug(f"ALB TargetResponseTime data points for {alb_arn}: {response_time_result.get('Datapoints', [])}")
 
@@ -284,7 +281,7 @@ def fetch_alb_metrics(load_balancer_arns: list, window: datetime, include_timeli
                 "id": alb_arn,
                 "display_name": f"Application Load Balancer",
                 "status": status,
-                "observed_at": observered_at,
+                "observed_at": observed_at,
                 "metrics": {
                     "RequestCount": avg_request_count if avg_request_count is not None else 0,
                     "TargetResponseTime": avg_response_time if avg_response_time is not None else 0
@@ -323,6 +320,7 @@ def fetch_eb_metrics(window: datetime) -> list:
     '''
     components = []
     try:
+        eb_client = boto3.client("elasticbeanstalk", region_name=AWS_REGION)
         response = eb_client.describe_environment_health(
             EnvironmentName=ELASTIC_BEANSTALK_ENV_NAME,
             AttributeNames=['All']
@@ -376,6 +374,7 @@ def fetch_s3_metrics() -> list:
     components = []
     bucket_name = S3_INGESTION_BUCKET
     try:
+        s3_client = boto3.client("s3", region_name=AWS_REGION)
         paginator = s3_client.get_paginator('list_objects_v2')
         page_iterator = paginator.paginate(Bucket=bucket_name)
 
@@ -432,6 +431,7 @@ def fetch_application_logs(window: datetime) -> list:
     components = []
     log_group = CLOUDWATCH_LOG_GROUP
     try:
+        logs_client = boto3.client("logs", region_name=AWS_REGION)
         logger.debug(f"Fetching application logs from log group: {log_group}")
         response = logs_client.filter_log_events(
             logGroupName=log_group,
@@ -459,7 +459,7 @@ def fetch_application_logs(window: datetime) -> list:
             "display_name": "Application Logs",
             "status": "Unknown",
             "observed_at": datetime.now(timezone.utc).isoformat(),
-            "timeline": []
+            "timeline": {}
         })
     return components
 
@@ -472,10 +472,7 @@ def system_health_components():
     Return health status of various system components.
 
     Request Format:
-    {
-        "windowMinutes": <int>  # Optional, default is 60,
-        "includeTimeline": <bool>  # Optional, default is False
-    }
+    /health/components?windowMinutes=60&includeTimeline=true
 
     Response Format:
     {
@@ -490,8 +487,8 @@ def system_health_components():
         401 Unauthorized: If authentication fails.
         403 Forbidden: If the user lacks necessary permissions.
     """
-    # Access JSON if sent
-    req_data = request.get_json(silent=True) or {}
+    # Access query parameters
+    req_data = request.args.to_dict()
 
     # Validate allowed keys
     allowed_keys = {"windowMinutes", "includeTimeline"}
@@ -499,7 +496,11 @@ def system_health_components():
         return jsonify({"message": "Invalid request format."}), 400
 
     # Get values with defaults
-    window_minutes = int(req_data.get("windowMinutes", 60))
+    try:
+        window_minutes = int(req_data.get("windowMinutes", 60))
+    except (ValueError, TypeError):
+        return jsonify({"message": "windowMinutes must be an integer."}), 400
+    
     include_timeline = req_data.get("includeTimeline", False)
 
     window = datetime.now(timezone.utc) - timedelta(minutes=window_minutes)
@@ -572,7 +573,7 @@ def system_health_components():
     response = {
         "components": components,
         "generated_at": datetime.now(timezone.utc).isoformat(),
-        "window_minutes": window
+        "window_minutes": window_minutes
     }
 
     return jsonify(response), 200
