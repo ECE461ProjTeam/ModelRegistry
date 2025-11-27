@@ -6,10 +6,6 @@ jobs:
     env:
       DEFAULT_USER: ${{ secrets.DEFAULT_USER }}
       DEFAULT_PASSWORD: ${{ secrets.DEFAULT_PASSWORD }}
-      ELASTIC_BEANSTALK_ENV_NAME: ${{ secrets.ELASTIC_BEANSTALK_ENV_NAME }}
-      BUCKET_NAME: ${{ secrets.BUCKET_NAME }}
-      DB_CLUSTER_IDENTIFIER: ${{ secrets.DB_CLUSTER_IDENTIFIER }}
-      CLOUDWATCH_LOG_GROUP: ${{ secrets.CLOUDWATCH_LOG_GROUP }}
     steps:
       # Backend (Python) tests
       - uses: actions/checkout@v4

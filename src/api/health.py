@@ -24,12 +24,13 @@ logger = get_logger("api.health")
 # AWS Configuration
 AWS_REGION = os.environ.get("AWS_REGION", "us-east-2")
 
-# AWS Components
+# AWS Components (assumed to be set in .env or environment)
 ELASTIC_BEANSTALK_ENV_NAME = os.environ.get("ELASTIC_BEANSTALK_ENV_NAME")
 S3_INGESTION_BUCKET = os.environ.get("BUCKET_NAME")
 DB_CLUSTER_IDENTIFIER = os.environ.get("DB_CLUSTER_IDENTIFIER")
 CLOUDWATCH_LOG_GROUP = os.environ.get("CLOUDWATCH_LOG_GROUP")
 
+# Metric Granularity
 GRANULARITY = 60  # 1 minute granularity for metrics, meaning that data points are aggregated over 1 minute intervals
 
 # Health Check Route
@@ -75,9 +76,9 @@ def fetch_ec2_metrics(instance_ids: list, window: datetime, include_timeline: bo
     '''
     components = []
     # For each instance, fetch CPUUtilization metric from CloudWatch.
+    cloudwatch = boto3.client("cloudwatch", region_name=AWS_REGION)
     for instance_id in instance_ids:
         try:
-            cloudwatch = boto3.client("cloudwatch", region_name=AWS_REGION)
             logger.debug(f"Fetching CPUUtilization for instance: {instance_id}")
             result = cloudwatch.get_metric_statistics(
                 Namespace="AWS/EC2",
@@ -230,6 +231,7 @@ def fetch_alb_metrics(load_balancer_arns: list, window: datetime, include_timeli
     '''
     Fetch ALB metrics from CloudWatch within the given time window.
     Args:
+        load_balancer_arns (list): List of ALB ARNs.
         window (datetime): Start time for metrics retrieval.
         include_timeline (bool): Whether to include timeline data. Default is False.
     Returns:
@@ -238,9 +240,9 @@ def fetch_alb_metrics(load_balancer_arns: list, window: datetime, include_timeli
         - TargetResponseTime: Average
     '''
     components = []
+    cloudwatch = boto3.client("cloudwatch", region_name=AWS_REGION)
     for alb_arn in load_balancer_arns:
         try:
-            cloudwatch = boto3.client("cloudwatch", region_name=AWS_REGION)
             logger.debug(f"Fetching ALB metrics for: {alb_arn}")
             # Extract ALB name in correct CloudWatch format (app/<name>/<id>)
             alb_name = alb_arn.split(":")[-1].replace("loadbalancer/", "")
@@ -363,7 +365,7 @@ def fetch_eb_metrics(window: datetime) -> list:
 
 def fetch_s3_metrics() -> list:
     '''
-    Fetch S3 bucket metrics from CloudWatch within the given time window.
+    Fetch a point-in-time snapshot of S3 bucket metrics.
     Only for the following buckets:
         - BUCKET_NAME
     Returns:
@@ -501,7 +503,27 @@ def system_health_components():
     except (ValueError, TypeError):
         return jsonify({"message": "windowMinutes must be an integer."}), 400
     
-    include_timeline = req_data.get("includeTimeline", False)
+    # Ensure window_minutes is positive
+    if window_minutes <= 0:
+        return jsonify({"message": "windowMinutes must be a positive integer."}), 400
+
+    # Ensure includeTimeline is a boolean, if not return 400
+    include_timeline_raw = req_data.get("includeTimeline", None)
+    if include_timeline_raw is None:
+        include_timeline = False
+    else:
+        if isinstance(include_timeline_raw, bool):
+            include_timeline = include_timeline_raw
+        elif isinstance(include_timeline_raw, str):
+            v = include_timeline_raw.strip().lower()
+            if v in ("true", "1"): 
+                include_timeline = True
+            elif v in ("false", "0"):
+                include_timeline = False
+            else:
+                return jsonify({"message": "includeTimeline must be a boolean."}), 400
+        else:
+            return jsonify({"message": "includeTimeline must be a boolean."}), 400
 
     window = datetime.now(timezone.utc) - timedelta(minutes=window_minutes)
 
