@@ -8,6 +8,7 @@ import re
 from multiprocessing import Process, Queue
 from concurrent.futures import TimeoutError as FuturesTimeoutError
 from src.logger import get_logger
+from .auth import check_permissions
 
 regex_bp = Blueprint("regex_bp", __name__)
 config = TestConfig if os.environ.get("DEBUG") == "True" else Config
@@ -102,7 +103,7 @@ def regex_is_safe(pattern: str, timeout: int = 1):
 # Flask route
 # ------------------------------
 @regex_bp.route('/artifact/byRegEx', methods=['POST'])
-@jwt_required()
+@check_permissions("search")
 def ArtifactByRegExGet():
     """Get artifacts whose names match the provided regular expressions."""
     #TODO: look through READMEs of artifacts as well
