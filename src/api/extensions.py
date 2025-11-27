@@ -8,11 +8,14 @@ from flask_sqlalchemy import SQLAlchemy
 from flask_jwt_extended import JWTManager
 from flask_bcrypt import Bcrypt
 from flask_cors import CORS
+from src.logger import get_logger
 import os
 
 db = SQLAlchemy()
 jwt = JWTManager()
 bcrypt = Bcrypt()
+
+logger = get_logger("api.extensions")
 
 def init_extensions(app):
     db.init_app(app)
@@ -23,7 +26,7 @@ def init_extensions(app):
     allowed_origins = os.environ.get("ALLOWED_ORIGINS", "http://localhost:5173,https://localhost:5173").split(",")
 
     # print allowed origins for debugging
-    print(f"Allowed origins for CORS: {allowed_origins}")
+    logger.debug(f"Allowed origins for CORS: {allowed_origins}")
     
     CORS(app, resources={r"/*": {"origins": allowed_origins}},
          supports_credentials=True,
