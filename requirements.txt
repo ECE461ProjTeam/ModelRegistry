@@ -12,4 +12,4 @@ dotenv==0.9.9
 python-dotenv==1.2.1
 psycopg2-binary==2.9.6
 flask-cors==6.0.1
-boto==1.41.3
+boto3==1.40.68
