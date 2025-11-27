@@ -54,6 +54,18 @@ class Config:
     JWT_HEADER_NAME = "X-Authorization"
     JWT_HEADER_TYPE = "bearer"
 
+    # AWS Settings
+    AWS_ACCESS_KEY_ID = os.environ.get("AWS_ACCESS_KEY_ID")
+    AWS_SECRET_ACCESS_KEY = os.environ.get("AWS_SECRET_ACCESS_KEY")
+    AWS_REGION = os.environ.get("AWS_REGION", "us-east-2")
+
+    # AWS Components
+    ELASTIC_BEANSTALK_ENV_NAME = os.environ.get("ELASTIC_BEANSTALK_ENV_NAME")
+    S3_INGESTION_BUCKET = os.environ.get("S3_INGEST_BUCKET")
+    DB_CLUSTER_IDENTIFIER = os.environ.get("DB_CLUSTER_IDENTIFIER")
+    ALB_NAME = os.environ.get("ALB_NAME")
+    CLOUDWATCH_LOG_GROUP = os.environ.get("CLOUDWATCH_LOG_GROUP")
+
 
 class TestConfig(Config):
     """Local testing config"""
@@ -69,3 +81,15 @@ class TestConfig(Config):
     # Tests should also use X-Authorization header
     JWT_HEADER_NAME = "X-Authorization"
     JWT_HEADER_TYPE = "bearer"
+
+    # AWS Settings
+    AWS_ACCESS_KEY_ID = os.environ.get("AWS_ACCESS_KEY_ID")
+    AWS_SECRET_ACCESS_KEY = os.environ.get("AWS_SECRET_ACCESS_KEY")
+    AWS_REGION = os.environ.get("AWS_REGION", "us-east-2")
+    
+    # AWS Components
+    ELASTIC_BEANSTALK_ENV_NAME = os.environ.get("ELASTIC_BEANSTALK_ENV_NAME")
+    S3_INGESTION_BUCKET = os.environ.get("S3_INGEST_BUCKET")
+    DB_CLUSTER_IDENTIFIER = os.environ.get("DB_CLUSTER_IDENTIFIER")
+    ALB_NAME = os.environ.get("ALB_NAME")
+    CLOUDWATCH_LOG_GROUP = os.environ.get("CLOUDWATCH_LOG_GROUP")
