@@ -193,7 +193,7 @@ class TestArtifactCreateEndpoint(TestAPIEndpoints):
         self.assertEqual(response.status_code, 400)
         data = json.loads(response.data)
         # app returns error under 'message'
-        self.assertIn('missing field', data.get('message', '').lower())
+        self.assertIn('missing field', data.get('error', '').lower())
 
     def test_create_model_invalid_url(self):
         """Test POST /artifact/model fails with invalid url format"""
@@ -207,7 +207,7 @@ class TestArtifactCreateEndpoint(TestAPIEndpoints):
         
         self.assertEqual(response.status_code, 400)
         data = json.loads(response.data)
-        self.assertIn('message', data)
+        self.assertIn('error', data)
 
     def test_create_code_success(self):
         """Test POST /artifact/code creates a new code artifact"""
@@ -295,7 +295,7 @@ class TestArtifactRetrieveEndpoint(TestAPIEndpoints):
         
         self.assertEqual(response.status_code, 404)
         data = json.loads(response.data)
-        self.assertEqual(data.get('message'), 'Artifact does not exist.')
+        self.assertEqual(data.get('error'), 'Artifact does not exist.')
 
     def test_retrieve_invalid_artifact_type(self):
         """Test GET /artifacts/{invalid_type}/{id} returns 400"""
@@ -306,7 +306,7 @@ class TestArtifactRetrieveEndpoint(TestAPIEndpoints):
         
         self.assertEqual(response.status_code, 400)
         data = json.loads(response.data)
-        self.assertIn('missing field', data.get('message', '').lower())
+        self.assertIn('missing field', data.get('error', '').lower())
 
     def test_retrieve_invalid_id_format(self):
         """Test GET /artifacts/model/{invalid_id} returns 400"""
@@ -378,7 +378,7 @@ class TestArtifactUpdateEndpoint(TestAPIEndpoints):
         
         self.assertEqual(response.status_code, 404)
         data = json.loads(response.data)
-        self.assertEqual(data.get('message'), 'Artifact does not exist.')
+        self.assertEqual(data.get('error'), 'Artifact does not exist.')
 
     def test_update_invalid_artifact_type(self):
         """Test PUT /artifacts/{invalid_type}/{id} returns 400"""
@@ -479,7 +479,7 @@ class TestArtifactsListEndpoint(TestAPIEndpoints):
         
         self.assertEqual(response.status_code, 400)
         data = json.loads(response.data)
-        self.assertIn('missing field', data.get('message', '').lower())
+        self.assertIn('missing field', data.get('error', '').lower())
 
     def test_list_artifacts_missing_types(self):
         """Test POST /artifacts fails without types field"""
