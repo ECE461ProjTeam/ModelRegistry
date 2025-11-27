@@ -222,7 +222,6 @@ class TestPermissions(unittest.TestCase):
 
     def test_check_permissions_decorator_allowed(self):
         """Test that the check_permissions decorator allows access when permissions are present."""
-        """Test that the check_permissions decorator allows access when permissions are present."""
         # Create a user with the required permission
         with self.app.app_context():
             u = User(name='permuser', is_admin=False, permissions=['search', 'upload'])

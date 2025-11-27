@@ -151,7 +151,8 @@ class Artifact(db.Model):
     @staticmethod
     def is_valid_git_url(url: str) -> bool:
         """Check if the provided URL is a valid Git repository URL."""
-        return url.startswith("git://") or url.startswith("https://github.com/") or url.startswith("http://github.com/")
+        return url.startswith("git://") or url.startswith("https://github.com/") or url.startswith("http://github.com/") \
+                or url.startswith("https://gitlab.com/") or url.startswith("http://gitlab.com/")
     
     @staticmethod
     def is_valid_url(url: str) -> bool:
