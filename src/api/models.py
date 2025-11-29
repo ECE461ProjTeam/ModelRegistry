@@ -21,12 +21,13 @@ else:
     MAX_REQUESTS = int(Config.MAX_REQUESTS_PER_TOKEN)
     
 class Artifact(db.Model):
-    id = db.Column(db.BigInteger, primary_key=True, autoincrement=True)
+    id = db.Column(
+        db.BigInteger().with_variant(db.Integer, "sqlite"),primary_key=True, autoincrement=True
+    )
     type = db.Column(db.String(50), nullable=False)
     download_url = db.Column(db.String(300), nullable=True)
     name = db.Column(db.String(150), nullable=True)
     url = db.Column(db.String(300), nullable=False)
-    
 
 class User(db.Model):
     id = db.Column(db.Integer, primary_key=True)
