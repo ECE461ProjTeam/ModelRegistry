@@ -22,8 +22,8 @@ export default function AdminReset() {
       });
 
       if (res.status === 200) setSuccess("Registry reset successfully.");
-    } catch {
-      setError("Failed to reset.");
+    } catch (err) {
+      setError(err.response?.data?.message || "Failed to reset. Please try again.");
     }
   };
 
