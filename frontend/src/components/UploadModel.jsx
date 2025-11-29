@@ -17,8 +17,19 @@ export default function UploadModel() {
     setError("");
 
     if (!url.trim()) return setError("Please enter a model URL.");
+    try {
+      new URL(url);
+    } catch {
+      return setError("Please enter a valid URL format.");
+    }
 
-    let name = url.split("/").pop() || "model";
+    let name;
+    try {
+      const urlObj = new URL(url);
+      name = urlObj.pathname.split("/").filter(Boolean).pop() || "model";
+    } catch {
+      name = "model";
+    }
 
     try {
       setLoading(true);
@@ -36,7 +47,7 @@ export default function UploadModel() {
         setUrl("");
       }
     } catch (err) {
-      setError("Upload failed.");
+      setError(err.response?.data?.message || "Upload failed. Please try again.");
     } finally {
       setLoading(false);
     }

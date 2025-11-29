@@ -7,9 +7,7 @@ import ErrorBanner from "../components/ErrorBanner.jsx";
 
 export default function AdminReset() {
   const [success, setSuccess] = useState("");
-  const [error, setError] =
-  useState("");
-
+  const [error, setError] = useState("");
   const reset = async () => {
     setSuccess("");
     setError("");
@@ -22,8 +20,8 @@ export default function AdminReset() {
       });
 
       if (res.status === 200) setSuccess("Registry reset successfully.");
-    } catch {
-      setError("Failed to reset.");
+    } catch (err) {
+      setError(err.response?.data?.message || "Failed to reset. Please try again.");
     }
   };
 
