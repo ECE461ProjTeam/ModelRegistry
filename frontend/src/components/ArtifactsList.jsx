@@ -8,15 +8,20 @@ export default function ArtifactsList() {
   const [list, setList] = useState(null);
 
   const fetchArtifacts = async () => {
-    const token = localStorage.getItem("token");
+    try {
+      const token = localStorage.getItem("token");
 
-    const body = [{ name: "*", types: ["model", "dataset", "code"] }];
+      const body = [{ name: "*", types: ["model", "dataset", "code"] }];
 
-    const res = await axios.post(API_ENDPOINTS.ARTIFACTS, body, {
-      headers: { "X-Authorization": token },
-    });
+      const res = await axios.post(API_ENDPOINTS.ARTIFACTS, body, {
+        headers: { "X-Authorization": token },
+      });
 
-    setList(res.data);
+      setList(res.data);
+    } catch (err) {
+      console.error("Failed to fetch artifacts:", err);
+      setList([]);
+    }
   };
 
   useEffect(() => {
