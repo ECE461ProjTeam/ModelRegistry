@@ -53,7 +53,7 @@ export default function SystemHealthDashboard() {
                   {status.message}
                 </span>
               </p>
-              <p>Latency: {status.ms} ms</p>
+              <p>Latency: {status.ms !== null ? `${status.ms} ms` : "N/A"}</p>
               <p>HTTP Code: {status.code}</p>
 
               <button onClick={fetchHealth} style={{ marginTop: "1rem" }}>
