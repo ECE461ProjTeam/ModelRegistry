@@ -54,7 +54,7 @@ export default function SystemHealthDashboard() {
                 </span>
               </p>
               <p>Latency: {status.ms !== null ? `${status.ms} ms` : "N/A"}</p>
-              <p>HTTP Code: {status.code}</p>
+              <p>HTTP Code: {status.code !== null && status.code !== undefined ? status.code : "N/A"}</p>
 
               <button onClick={fetchHealth} style={{ marginTop: "1rem" }}>
                 Refresh
