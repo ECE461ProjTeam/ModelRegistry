@@ -7,9 +7,7 @@ import ErrorBanner from "../components/ErrorBanner.jsx";
 
 export default function AdminReset() {
   const [success, setSuccess] = useState("");
-  const [error, setError] =
-  useState("");
-
+  const [error, setError] = useState("");
   const reset = async () => {
     setSuccess("");
     setError("");
