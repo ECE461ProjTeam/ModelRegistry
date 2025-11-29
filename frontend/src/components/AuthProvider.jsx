@@ -27,8 +27,13 @@ const AuthProvider = ({ children }) => {
         headers: { "X-Authorization": token }
       });
 
-      const profileData = await profileRes.json();
-      setUser(profileData.profile || { name: username });
+      if (profileRes.ok) {
+        const profileData = await profileRes.json();
+        setUser(profileData.profile || { name: username });
+      } else {
+        // Fallback to basic user info if profile fetch fails
+        setUser({ name: username });
+      }
 
       return true;
     } catch (err) {
