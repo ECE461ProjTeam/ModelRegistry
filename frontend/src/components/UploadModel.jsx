@@ -36,7 +36,7 @@ export default function UploadModel() {
         setUrl("");
       }
     } catch (err) {
-      setError("Upload failed.");
+      setError(err.response?.data?.message || "Upload failed. Please try again.");
     } finally {
       setLoading(false);
     }
