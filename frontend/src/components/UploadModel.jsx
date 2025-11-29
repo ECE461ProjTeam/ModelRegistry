@@ -17,6 +17,11 @@ export default function UploadModel() {
     setError("");
 
     if (!url.trim()) return setError("Please enter a model URL.");
+    try {
+      new URL(url);
+    } catch {
+      return setError("Please enter a valid URL format.");
+    }
 
     let name = url.split("/").pop() || "model";
 
