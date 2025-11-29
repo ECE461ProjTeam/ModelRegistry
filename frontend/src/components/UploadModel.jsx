@@ -23,7 +23,13 @@ export default function UploadModel() {
       return setError("Please enter a valid URL format.");
     }
 
-    let name = url.split("/").pop() || "model";
+    let name;
+    try {
+      const urlObj = new URL(url);
+      name = urlObj.pathname.split("/").filter(Boolean).pop() || "model";
+    } catch {
+      name = "model";
+    }
 
     try {
       setLoading(true);
