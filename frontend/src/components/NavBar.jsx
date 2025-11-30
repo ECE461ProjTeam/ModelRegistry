@@ -11,7 +11,7 @@ export default function Navbar() {
     <nav className="navbar">
       <div className="nav-links">
         <Link to="/dashboard">Dashboard</Link>
-        <Link to="/upload">Upload</Link>
+        <Link to="/upload">Upload Artifact</Link>
         <Link to="/health">Health</Link>
       </div>
 

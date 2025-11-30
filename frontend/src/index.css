@@ -1,51 +1,62 @@
-/* Dark mode by default */
+/* Global colors */
 :root {
   --text-color: #e4e4e7;
   --bg-color: #1a1a1a;
   --card-bg: #27272a;
   --border-color: #3f3f46;
-
   --btn-bg: #3b82f6;
   --btn-hover: #2563eb;
-
-  font-family: system-ui, Avenir, Helvetica, Arial, sans-serif;
-  line-height: 1.5;
-  font-weight: 400;
 }
 
 body {
   margin: 0;
-  background-color: var(--bg-color);
+  background: var(--bg-color);
   color: var(--text-color);
+  font-family: system-ui, Avenir, Helvetica, Arial, sans-serif;
 }
 
-/* Utility classes */
+/* General container */
 .container {
   max-width: 900px;
   margin: 0 auto;
   padding: 2rem;
 }
 
+/* Centered narrow container for login / forms */
+.narrow {
+  max-width: 480px;
+  margin: 0 auto;
+}
+
+/* Card styling */
 .card {
   background: var(--card-bg);
   padding: 2rem;
   border-radius: 12px;
   border: 1px solid var(--border-color);
+  margin-top: 2rem;
 }
 
-input, button {
-  font-family: inherit;
+.label {
+  font-size: 0.95rem;
+  opacity: 0.85;
+  margin-bottom: 0.5rem;
+  display: block;
 }
 
-input {
+/* Inputs and selects */
+input, select {
   background: #18181b;
   color: var(--text-color);
   padding: 0.7rem 1rem;
   border-radius: 8px;
   border: 1px solid var(--border-color);
   width: 100%;
+  box-sizing: border-box;
+  margin-top: 0.6rem;
 }
 
+/* BUTTONS ← global buttons no longer full width */
 button {
   background: var(--btn-bg);
   color: white;
@@ -53,9 +64,16 @@ button {
   border-radius: 8px;
   border: none;
   cursor: pointer;
+  box-sizing: border-box;
 }
 button:hover {
   background: var(--btn-hover);
+}
+
+/* Only form buttons are full-width */
+.card form button,
+.card > button {
+  width: 100%;
 }
 
 /* Navbar */
@@ -79,25 +97,52 @@ button:hover {
   text-decoration: underline;
 }
 
+/* Dashboard Tiles */
+.tiles {
+  display: grid;
+  gap: 1.5rem;
+  grid-template-columns: repeat(auto-fit, minmax(260px, 1fr));
+  margin-top: 2rem;
+}
+
+.tile-link {
+  text-decoration: none;
+  color: inherit;
+}
+
+.tile {
+  background: var(--card-bg);
+  border: 1px solid var(--border-color);
+  border-radius: 12px;
+  padding: 2rem;
+  height: 190px;
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  transition: 0.2s;
+}
+
+.tile:hover {
+  border-color: #60a5fa;
+  box-shadow: 0 0 12px #3b82f6aa;
+}
+
+.tile-icon {
+  font-size: 2rem;
+  margin-bottom: 0.6rem;
+}
+
+/* Status messages */
+.status-error {
+  color: #f87171;
+  margin-top: 1rem;
+}
 .status-success {
   color: #4ade80;
 }
-.status-error {
-  color: #f87171;
-}
 
-.status-box {
-  padding: 0.7rem 1rem;
-  background: #18181b;
-  border: 1px solid var(--border-color);
-  border-radius: 8px;
-  margin-top: 1rem;
-}
-
-
+/* Spinner animation */
 @keyframes spin {
-  to {
-    transform: rotate(360deg);
-  }
+  to { transform: rotate(360deg); }
 }
 
