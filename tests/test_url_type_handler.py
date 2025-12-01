@@ -336,7 +336,7 @@ class TestHandleURL:
             "code_quality": Mock(value=0.8, seconds=0.001),
             "reviewedness": Mock(value=0.7, seconds=0.001),
             "reproducibility": Mock(value=0.8, seconds=0.001),
-            "treescore": Mock(value=0.6, seconds=0.001)
+            "tree_score": Mock(value=0.6, seconds=0.001)
         }
 
         mock_summary = {"net_score": 0.75, "net_score_latency": 10}
@@ -373,7 +373,7 @@ class TestHandleURL:
         mock_results = {
             "reviewedness": Mock(value=0.75, seconds=0.001),
             "reproducibility": Mock(value=0.75, seconds=0.001),
-            "treescore": Mock(value=0.75, seconds=0.001)
+            "tree_score": Mock(value=0.75, seconds=0.001)
         }
         mock_summary = {"net_score": 0.0, "net_score_latency": 0}
         mock_latencies = {"total_latency": 0.0, "components": {}}
@@ -411,7 +411,7 @@ class TestHandleURL:
             "size": mock_size_metric,
             "reviewedness": Mock(value=0.75, seconds=0.001),
             "reproducibility": Mock(value=0.75, seconds=0.001),
-            "treescore": Mock(value=0.75, seconds=0.001)
+            "tree_score": Mock(value=0.75, seconds=0.001)
         }
         mock_summary = {"net_score": 0.5}
         mock_latencies = {"total_latency": 0.5, "components": {"size": 0.5}}
@@ -440,7 +440,7 @@ class TestHandleURL:
         mock_results = {
             "reviewedness": Mock(value=0.75, seconds=0.001),
             "reproducibility": Mock(value=0.75, seconds=0.001),
-            "treescore": Mock(value=0.75, seconds=0.001)
+            "tree_score": Mock(value=0.75, seconds=0.001)
         }
         mock_summary = {"net_score": 0.5}
         mock_latencies = {"total_latency": 0.01, "components": {}}
@@ -477,7 +477,7 @@ class TestIntegration:
                 mock_results = {
                     "reviewedness": Mock(value=0.75, seconds=0.001),
                     "reproducibility": Mock(value=0.75, seconds=0.001),
-                    "treescore": Mock(value=0.75, seconds=0.001)
+                    "tree_score": Mock(value=0.75, seconds=0.001)
                 }
                 mock_run.return_value = (mock_results, {"net_score": 0.0}, {
                                          "total_latency": 0.0, "components": {}})
