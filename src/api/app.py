@@ -9,6 +9,7 @@ platforms like Elastic Beanstalk) can discover the callable.
 """
 
 from flask import Flask, jsonify, request
+from flask_cors import CORS
 from flask_jwt_extended import jwt_required, get_jwt, verify_jwt_in_request
 from .classes import *
 from src.logger import get_logger
@@ -32,6 +33,9 @@ plannedTracks = ["Access control track"]
 # model_registry = {}
 
 app = Flask(__name__)
+
+CORS(app, resources={r"/*": {"origins": "http://localhost:5173"}})
+
 
 
 if os.environ.get("DEBUG", "False") == "True":
