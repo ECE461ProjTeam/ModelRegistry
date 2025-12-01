@@ -13,12 +13,16 @@ from flask_jwt_extended import jwt_required, get_jwt, verify_jwt_in_request
 from src.logger import get_logger
 from .models import User, TokenUsage, Artifact
 from .auth import auth_bp, create_default_admin, check_permissions
+from .health import health_bp
 from .config import Config, TestConfig
 from .extensions import init_extensions, db
 # from datetime import datetime, timezone
 from dotenv import load_dotenv
-import os
 from .s3 import clear_s3_bucket
+import os
+import re
+from sqlalchemy import event
+from .byRegex import regex_bp
 
 # `override=True` ensures edits to the .env file replace current os.environ values
 load_dotenv(override=True)
@@ -51,8 +55,18 @@ with app.app_context():
     if not admin_user:
         create_default_admin()
 
-app.register_blueprint(auth_bp)
+    # Enable REGEXP support for SQLite
+    @event.listens_for(db.engine, "connect")
+    def sqlite_enable_regex(conn, record):
+        def regexp(pattern, string):
+            reg = re.compile(pattern)
+            return reg.search(string) is not None
+        conn.create_function("REGEXP", 2, regexp)
 
+app.register_blueprint(auth_bp)
+app.register_blueprint(regex_bp)
+
+app.register_blueprint(health_bp)
 
 @app.before_request
 @jwt_required(optional=True)
@@ -115,12 +129,6 @@ def enforce_request_limit():
 def index():
     """Index route to verify that the API is running."""
     return jsonify({'message': 'Model Registry API is running'}), 200
-
-
-@app.route('/health', methods=['GET'])
-def health():
-    """Health check route."""
-    return jsonify({'message': 'Service reachable.'}), 200
 
 
 @app.route('/artifacts', methods=['POST'])
@@ -189,12 +197,12 @@ def ArtifactRetrieve(artifact_type, id):
     artifact = Artifact.query.filter_by(id=int(id)).first()
     if not artifact:
         return jsonify({'error': 'Artifact does not exist.'}), 404
-    try:
-        if artifact.type == artifact_type:
-            metadata = {"id": artifact.id, "name": artifact.name, "type": artifact.type}
-            return jsonify(metadata), 200
-    except Exception as e:
-        pass
+    
+    if artifact.type == artifact_type:
+        metadata = {"id": artifact.id, "name": artifact.name, "type": artifact.type}
+        data = {"url": artifact.url}
+        res = {"metadata": metadata, "data": data}
+        return jsonify(res), 200
 
     return jsonify({'error': 'Artifact does not exist.'}), 404
 
@@ -236,8 +244,20 @@ def ArtifactUpdate(artifact_type, id):
 @app.route('/artifacts/<artifact_type>/<id>', methods=['DELETE'])
 @check_permissions()
 def ArtifactDelete(artifact_type, id):
-    """Delete only the artifact that matches 'id'. (id is a unique identifier for an artifact)."""    
-    return jsonify({'message': 'Not implemented'}), 501
+    if artifact_type not in ["model", "dataset", "code"] or not id.isdigit():
+        return jsonify({'message': 'There is missing field(s) in the artifact_type or artifact_id or invalid.'}), 400
+    
+    artifact = Artifact.query.filter_by(id=int(id), type=artifact_type).first()
+    if not artifact:
+        return jsonify({'message': 'Artifact does not exist.'}), 404
+
+    db.session.delete(artifact)
+    db.session.commit()
+
+    if Artifact.query.filter_by(id=int(id), type=artifact_type).first():
+        return jsonify({'message': 'Deletion failed.'}), 500
+    
+    return jsonify({'message': 'Artifact is deleted.'}), 200
 
 
 @app.route('/artifact/<artifact_type>', methods=['POST'])
@@ -333,7 +353,19 @@ def get_artifact_artifact_type_id_cost(artifact_type, id):
 @check_permissions("search")
 def ArtifactByNameGet(name):
     """Return metadata for each version matching this artifact name."""
-    return jsonify({'message': 'Not implemented'}), 501
+    if not name:
+        return jsonify({'message': 'There is missing field(s) in the artifact_name or it is formed improperly, or is invalid.'}), 400
+
+    if name == "*":
+        artifacts = Artifact.query.all()
+    else:
+        artifacts = Artifact.query.filter_by(name=name).all()
+
+    if not artifacts:
+        return jsonify({'message': 'No such artifact.'}), 404    
+    
+    res = [{"name": art.name, "id": art.id, "type": art.type} for art in artifacts]
+    return jsonify(res), 200
 
 
 @app.route('/artifact/<artifact_type>/<id>/audit', methods=['GET'])
