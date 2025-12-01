@@ -16,6 +16,48 @@ from src.api.app import app
 from src.api.models import User, TokenUsage, Artifact
 from flask_jwt_extended import get_jti
 from src.api.extensions import db
+from unittest.mock import patch, MagicMock
+
+
+# Helper to mock boto3.client calls for health endpoints so tests do not call AWS
+def mocked_boto3_client(service_name, region_name=None):
+    mock = MagicMock()
+
+    if service_name == "elasticbeanstalk":
+        # describe_environment_resources used to get Instances and LoadBalancers
+        mock.describe_environment_resources.return_value = {
+            "EnvironmentResources": {
+                "Instances": [{"Id": "i-0123456789abcdef0"}],
+                "LoadBalancers": [{"Name": "arn:aws:elasticloadbalancing:us-east-2:123456789012:loadbalancer/app/myalb/50dc6c495c0c9188"}]
+            }
+        }
+        mock.describe_environment_health.return_value = {"Status": "Green", "Color": "Green"}
+        mock.describe_events.return_value = {"Events": [{"Message": "Mock event", "EventDate": "2025-01-01T00:00:00Z"}]}
+
+    if service_name == "cloudwatch":
+        # get_metric_statistics returns datapoints for metrics; support both Average and Sum
+        def get_metric_statistics(**kwargs):
+            metric = kwargs.get("MetricName", "")
+            if metric == 'CPUUtilization':
+                return {"Datapoints": [{"Average": 10.0}], "Label": metric}
+            if metric == 'WriteLatency':
+                return {"Datapoints": [{"Average": 0.1}], "Label": metric}
+            if metric == 'RequestCount':
+                return {"Datapoints": [{"Sum": 5}], "Label": metric}
+            return {"Datapoints": []}
+
+        mock.get_metric_statistics.side_effect = get_metric_statistics
+
+    if service_name == "s3":
+        # paginator for list_objects_v2
+        paginator = MagicMock()
+        paginator.paginate.return_value = [{"Contents": [{"Size": 100}, {"Size": 200}]}]
+        mock.get_paginator.return_value = paginator
+
+    if service_name == "logs":
+        mock.filter_log_events.return_value = {"events": [{"message": "log message", "timestamp": 1234567890}]}
+
+    return mock
 
 
 class TestAPIEndpoints(unittest.TestCase):
@@ -521,6 +563,91 @@ class TestEdgeCases(TestAPIEndpoints):
         self.assertEqual(response.status_code, 404)
 
 
+class TestSystemHealth(TestAPIEndpoints):
+    """Test /health and /health/components endpoints"""
+
+    def setUp(self):
+        # Start parent setup first (creates test client and auth headers)
+        super().setUp()
+        # Patch boto3.client so AWS calls are mocked for these tests
+        self._boto_patcher = patch('boto3.client', side_effect=mocked_boto3_client)
+        self.mock_boto_client = self._boto_patcher.start()
+
+    def tearDown(self):
+        # Stop boto3.client patcher then run parent teardown
+        try:
+            self._boto_patcher.stop()
+        except Exception:
+            pass
+        super().tearDown()
+    
+    def test_health_check_success(self):
+        """Test GET /health returns service reachable"""
+        response = self.client.get('/health', headers=self.headers)
+        
+        self.assertEqual(response.status_code, 200)
+        data = json.loads(response.data)
+        self.assertIn('message', data)
+        self.assertEqual(data['message'], 'Service reachable.')
+        self.assertIn('timestamp', data)
+    
+    def test_health_components_success(self):
+        """Test GET /health/components returns health components with valid auth"""
+        response = self.client.get('/health/components', headers=self.headers, query_string={'windowMinutes': 60, 'includeTimeline': 'true'})
+        
+        self.assertEqual(response.status_code, 200)
+        data = json.loads(response.data)
+        self.assertIn('components', data)
+        self.assertIsInstance(data['components'], list)
+
+    def test_health_components_empty_query(self):
+        """Test GET /health/components with empty query params returns default components"""
+        response = self.client.get('/health/components', headers=self.headers)
+        
+        self.assertEqual(response.status_code, 200)
+        data = json.loads(response.data)
+        self.assertIn('components', data)
+        self.assertIsInstance(data['components'], list)
+
+    def test_health_components_invalid_query(self):
+        """Test GET /health/components with invalid query params returns 400"""
+        response = self.client.get('/health/components', headers=self.headers, query_string={'invalid_key': 'value'})
+        
+        self.assertEqual(response.status_code, 400)
+        data = json.loads(response.data)
+        self.assertIn('message', data)
+    
+    def test_health_components_authentication_failed(self):
+        """Test GET /health/components fails with invalid authentication"""
+        # call without auth headers to simulate unauthenticated request
+        response = self.client.get('/health/components')
+        self.assertEqual(response.status_code, 401)
+
+    def test_health_components_invalid_windowMinutes(self):
+        """Test GET /health/components with invalid input returns 400"""
+        response = self.client.get('/health/components', headers=self.headers, query_string={'windowMinutes': 'not-an-integer'})
+        
+        self.assertEqual(response.status_code, 400)
+        data = json.loads(response.data)
+        self.assertIn('message', data)
+    
+    def test_health_components_negative_windowMinutes(self):
+        """Test GET /health/components with negative windowMinutes returns 400"""
+        response = self.client.get('/health/components', headers=self.headers, query_string={'windowMinutes': -10})
+        
+        self.assertEqual(response.status_code, 400)
+        data = json.loads(response.data)
+        self.assertIn('message', data)
+    
+    def test_health_components_invalid_includeTimeline(self):
+        """Test GET /health/components with invalid includeTimeline returns 400"""
+        response = self.client.get('/health/components', headers=self.headers, query_string={'includeTimeline': 'not-a-boolean'})
+        
+        self.assertEqual(response.status_code, 400)
+        data = json.loads(response.data)
+        self.assertIn('message', data)
+
+
 def suite():
     """Create test suite"""
     test_suite = unittest.TestSuite()
@@ -531,6 +658,7 @@ def suite():
     test_suite.addTest(unittest.makeSuite(TestArtifactUpdateEndpoint))
     test_suite.addTest(unittest.makeSuite(TestArtifactsListEndpoint))
     test_suite.addTest(unittest.makeSuite(TestEdgeCases))
+    test_suite.addTest(unittest.makeSuite(TestSystemHealth))
     return test_suite
 
 
