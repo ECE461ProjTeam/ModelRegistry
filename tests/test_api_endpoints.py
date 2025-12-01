@@ -263,7 +263,7 @@ class TestArtifactRetrieveEndpoint(TestAPIEndpoints):
         )
         
         self.assertEqual(response.status_code, 200)
-        data = json.loads(response.data)
+        data = json.loads(response.data)["metadata"]
         self.assertEqual(data['name'], 'whisper-tiny')
         self.assertEqual(data['id'], artifact_id)
         self.assertEqual(data['type'], 'model')
@@ -562,6 +562,164 @@ class TestEdgeCases(TestAPIEndpoints):
         
         self.assertEqual(response.status_code, 404)
 
+class TestSearchByName(TestAPIEndpoints):
+    """Test /artifact/byName/<name> GET endpoint"""
+
+    def test_search_by_name_success(self):
+        """Test POST /artifact/searchByName finds artifacts by name pattern"""
+        # Create multiple models
+        urls = [
+            "https://huggingface.co/openai/whisper-tiny",
+            "https://huggingface.co/openai/whisper-base",
+            "https://huggingface.co/bert/bert-base"
+        ]
+        names = ["whisper-tiny", "whisper-base", "bert-base"]
+        
+        for i, url in enumerate(urls):
+            self.client.post(
+                '/artifact/model',
+                headers=self.headers,
+                data=json.dumps({'url': url, 'name': names[i]})
+            )
+
+        response = self.client.get(
+            '/artifact/byName/whisper-tiny',
+            headers=self.headers,
+        )
+        
+        self.assertEqual(response.status_code, 200)
+        data = json.loads(response.data)
+        self.assertIsInstance(data, list)
+        self.assertEqual(len(data), 1)
+
+    def test_search_all(self):
+        """Test GET /artifact/byName/* returns all artifacts (wildcard search)."""
+        urls = [
+            "https://huggingface.co/openai/whisper-tiny",
+            "https://huggingface.co/openai/whisper-base",
+            "https://huggingface.co/bert/bert-base"
+        ]
+        names = ["whisper-tiny", "whisper-base", "bert-base"]
+        
+        for i, url in enumerate(urls):
+            self.client.post(
+                '/artifact/model',
+                headers=self.headers,
+                data=json.dumps({'url': url, 'name': names[i]})
+            )
+        response = self.client.get(
+            '/artifact/byName/*',
+            headers=self.headers,
+        )
+        self.assertEqual(response.status_code, 200)
+        data = json.loads(response.data)
+        self.assertIsInstance(data, list)
+        self.assertGreaterEqual(len(data), 3)
+
+    def test_search_by_name_no_matches(self):
+        """Test GET /artifact/byName returns 404 when no matches"""
+        urls = [
+            "https://huggingface.co/openai/whisper-tiny",
+            "https://huggingface.co/openai/whisper-base",
+            "https://huggingface.co/bert/bert-base"
+        ]
+        names = ["whisper-tiny", "whisper-base", "bert-base"]
+        
+        for i, url in enumerate(urls):
+            self.client.post(
+                '/artifact/model',
+                headers=self.headers,
+                data=json.dumps({'url': url, 'name': names[i]})
+            )
+        response = self.client.get(
+            '/artifact/byName/nonexistent',
+            headers=self.headers,
+        )
+        
+        self.assertEqual(response.status_code, 404)
+
+
+class TestSearchByRegex(TestAPIEndpoints):
+    """Test /artifact/byRegEx POST endpoint"""
+
+    def test_search_by_regex_success(self):
+        """Test POST /artifact/byRegEx finds artifacts matching regex"""
+        # Create multiple models
+        urls = [
+            "https://huggingface.co/openai/whisper-tiny",
+            "https://huggingface.co/openai/whisper-base",
+            "https://huggingface.co/bert/bert-base"
+        ]
+        names = ["whisper-tiny", "whisper-base", "bert-base"]
+        
+        for i, url in enumerate(urls):
+            self.client.post(
+                '/artifact/model',
+                headers=self.headers,
+                data=json.dumps({'url': url, 'name': names[i]})
+            )
+
+        payload = {'regex': 'whisper-.*'}
+        response = self.client.post(
+            '/artifact/byRegEx',
+            headers=self.headers,
+            data=json.dumps(payload)
+        )
+        
+        self.assertEqual(response.status_code, 200)
+        data = json.loads(response.data)
+        self.assertIsInstance(data, list)
+        self.assertEqual(len(data), 2)
+
+    def test_search_by_regex_no_matches(self):
+        """Test POST /artifact/byRegEx returns 404 when no matches"""
+        urls = [
+            "https://huggingface.co/openai/whisper-tiny",
+            "https://huggingface.co/openai/whisper-base",
+            "https://huggingface.co/bert/bert-base"
+        ]
+        names = ["whisper-tiny", "whisper-base", "bert-base"]
+        
+        for i, url in enumerate(urls):
+            self.client.post(
+                '/artifact/model',
+                headers=self.headers,
+                data=json.dumps({'url': url, 'name': names[i]})
+            )
+        payload = {'regex': 'nonexistent.*'}
+        response = self.client.post(
+            '/artifact/byRegEx',
+            headers=self.headers,
+            data=json.dumps(payload)
+        )
+        
+        self.assertEqual(response.status_code, 404)
+
+    def test_dangerous_regex_rejected(self):
+        """Test POST /artifact/byRegEx rejects dangerous regex patterns"""
+        payload = {'regex': '(a+)+$'}
+        response = self.client.post(
+            '/artifact/byRegEx',
+            headers=self.headers,
+            data=json.dumps(payload)
+        )
+        
+        self.assertEqual(response.status_code, 400)
+        data = json.loads(response.data)
+        self.assertIn('potentially dangerous', data.get('message', '').lower())
+
+    def test_missing_regex_field(self):
+        """Test POST /artifact/byRegEx fails without regex field"""
+        payload = {}
+        response = self.client.post(
+            '/artifact/byRegEx',
+            headers=self.headers,
+            data=json.dumps(payload)
+        )
+        
+        self.assertEqual(response.status_code, 400)
+        data = json.loads(response.data)
+
 
 class TestSystemHealth(TestAPIEndpoints):
     """Test /health and /health/components endpoints"""
@@ -658,6 +816,8 @@ def suite():
     test_suite.addTest(unittest.makeSuite(TestArtifactUpdateEndpoint))
     test_suite.addTest(unittest.makeSuite(TestArtifactsListEndpoint))
     test_suite.addTest(unittest.makeSuite(TestEdgeCases))
+    test_suite.addTest(unittest.makeSuite(TestSearchByName))
+    test_suite.addTest(unittest.makeSuite(TestSearchByRegex))
     test_suite.addTest(unittest.makeSuite(TestSystemHealth))
     return test_suite
 
