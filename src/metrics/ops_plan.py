@@ -5,7 +5,7 @@ from .operationalization import Operationalization
 # Size(0.05), License(0.08), RampUp(0.10), BusFactor(0.08),
 # Availability (Code+Data) (0.12), DatasetQuality(0.15),
 # CodeQuality(0.12), PerformanceClaims(0.10),
-# Reviewedness(0.07), Reproducibility(0.08), Treescore(0.05)
+# Reviewedness(0.07), Reproducibility(0.08), tree_score(0.05)
 
 default_ops = [
     Operationalization("size", {}, 0.05, "minmax", {
@@ -24,6 +24,6 @@ default_ops = [
                        "minmax", {"min": 0.0, "max": 1.0}, True),
     Operationalization("reviewedness", {}, 0.07, "identity", {}, True),
     Operationalization("reproducibility", {}, 0.08, "identity", {}, True),
-    Operationalization("treescore", {}, 0.05, "identity", {}, True),
+    Operationalization("tree_score", {}, 0.05, "identity", {}, True),
 ]
 

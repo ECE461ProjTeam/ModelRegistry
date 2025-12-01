@@ -30,8 +30,8 @@ def default_ndjson(
         reviewedness_latency=None,
         reproducibility=None,
         reproducibility_latency=None,
-        treescore=None,
-        treescore_latency=None):
+        tree_score=None,
+        tree_score_latency=None):
 
     if category is not None:
         hf_match = re.match(r"https?://huggingface\.co/([^/]+)/([^/]+)", model)
@@ -81,8 +81,8 @@ def default_ndjson(
         "reviewedness_latency": latency(reviewedness_latency),
         "reproducibility": reproducibility, # allow a score of 0.0
         "reproducibility_latency": latency(reproducibility_latency),
-        "treescore": score(treescore),
-        "treescore_latency": latency(treescore_latency)
+        "tree_score": score(tree_score),
+        "tree_score_latency": latency(tree_score_latency)
     }
 
     weights = {
@@ -96,7 +96,7 @@ def default_ndjson(
         "performance_claims": 0.10,
         "reviewedness": 0.07,
         "reproducibility": 0.08,
-        "treescore": 0.05
+        "tree_score": 0.05
     }
 
     weights_sum = sum(weights.values())
@@ -112,7 +112,7 @@ def default_ndjson(
                             ndjson["code_quality"] * weights["code_quality"] +
                             ndjson["reviewedness"] * weights["reviewedness"] +
                             ndjson["reproducibility"] * weights["reproducibility"] +
-                            ndjson["treescore"] * weights["treescore"]) / weights_sum)
+                            ndjson["tree_score"] * weights["tree_score"]) / weights_sum)
 
     # calculate latency as sum of all latencies
     ndjson["net_score_latency"] = (
@@ -126,6 +126,6 @@ def default_ndjson(
         ndjson["code_quality_latency"] +
         ndjson["reviewedness_latency"] +
         ndjson["reproducibility_latency"] +
-        ndjson["treescore_latency"])
+        ndjson["tree_score_latency"])
 
     return ndjson

@@ -1,10 +1,10 @@
-"""Treescore metric implementation."""
+"""tree_score metric implementation."""
 from __future__ import annotations
 from typing import Dict, Any
 from ..types import MetricResult
 
 
-class TreescoreMetric:
+class tree_scoreMetric:
     """Measures the decision tree complexity and quality.
     
     This could measure:
@@ -13,14 +13,14 @@ class TreescoreMetric:
     - Documentation tree structure
     - Repository organization
     
-    TODO: Implement the actual treescore logic.
+    TODO: Implement the actual tree_score logic.
     Currently returns a placeholder value.
     """
     
-    id = "treescore"
+    id = "tree_score"
 
     def compute(self, context: Dict[str, Any]) -> MetricResult:
-        """Calculate treescore.
+        """Calculate tree_score.
         
         Args:
             context: Dict containing:
@@ -34,7 +34,7 @@ class TreescoreMetric:
         import time
         start = time.time()
         
-        # TODO: Implement treescore logic here
+        # TODO: Implement tree_score logic here
         # Ideas:
         # 1. For tree-based models: analyze model complexity
         # 2. For code: analyze file/directory structure
