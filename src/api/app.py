@@ -14,6 +14,7 @@ from .classes import *
 from src.logger import get_logger
 from .models import User, TokenUsage, Artifact
 from .auth import auth_bp, create_default_admin, check_permissions
+from .health import health_bp
 from .config import Config, TestConfig
 from .extensions import init_extensions, db
 from src.url_parsers.url_type_handler import handle_url
@@ -66,6 +67,7 @@ with app.app_context():
 app.register_blueprint(auth_bp)
 app.register_blueprint(regex_bp)
 
+app.register_blueprint(health_bp)
 
 @app.before_request
 @jwt_required(optional=True)
@@ -128,12 +130,6 @@ def enforce_request_limit():
 def index():
     """Index route to verify that the API is running."""
     return jsonify({'message': 'Model Registry API is running'}), 200
-
-
-@app.route('/health', methods=['GET'])
-def health():
-    """Health check route."""
-    return jsonify({'message': 'Service reachable.'}), 200
 
 
 @app.route('/artifacts', methods=['POST'])
