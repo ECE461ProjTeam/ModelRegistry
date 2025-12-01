@@ -23,7 +23,7 @@ def build_registry_from_plan() -> MetricRegistry:
     from .impl.performance_claims import PerformanceClaimsMetric
     from .impl.reviewedness import ReviewednessMetric
     from .impl.reproducibility import ReproducibilityMetric
-    from .impl.tree_score import tree_scoreMetric
+    from .impl.tree_score import TreeScoreMetric
 
     reg = MetricRegistry()
     reg.register(SizeMetric())
@@ -36,7 +36,7 @@ def build_registry_from_plan() -> MetricRegistry:
     reg.register(PerformanceClaimsMetric())
     reg.register(ReviewednessMetric())
     reg.register(ReproducibilityMetric())
-    reg.register(tree_scoreMetric())
+    reg.register(TreeScoreMetric())
     return reg
 
 

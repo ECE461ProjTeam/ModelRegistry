@@ -4,7 +4,7 @@ from typing import Dict, Any
 from ..types import MetricResult
 
 
-class tree_scoreMetric:
+class TreeScoreMetric:
     """Measures the decision tree complexity and quality.
     
     This could measure:
