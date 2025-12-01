@@ -120,3 +120,30 @@ def get_huggingface_file(model_url: str):
         return None
 
     return local_file_path
+
+
+def download_hf_model(model_url: str, cache_dir: Optional[str] = None) -> Optional[str]:
+    """Download a Hugging Face model to a local directory.
+
+    Args:
+        model_url (str): The URL of the Hugging Face model.
+        cache_dir (Optional[str]): Directory to cache the model files.
+
+    Returns:
+        Optional[str]: Path to the downloaded model directory, or None if failed.
+    """
+    from src.metrics.data_fetcher import extract_hf_model_id
+
+    repo_id = extract_hf_model_id(model_url)
+    if not repo_id:
+        return None
+    try:
+        from huggingface_hub import snapshot_download
+
+        local_dir = snapshot_download(
+            repo_id=repo_id,
+            cache_dir=cache_dir or "./hf_cache")
+        return local_dir
+    except Exception as e:
+        logger.debug(f"Failed to download HF model {repo_id}: {e}")
+        return None

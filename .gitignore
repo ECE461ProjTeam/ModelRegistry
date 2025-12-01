@@ -12,6 +12,8 @@ reports/
 dev_env.py
 .pytest_cache/
 instance/
+local_test.sh
+remote_test.sh
 
 ## FRONTEND
 # Logs
@@ -40,4 +42,4 @@ dist-ssr
 !.elasticbeanstalk/*.cfg.yml
 !.elasticbeanstalk/*.global.yml
 .ssh/
-.aws/
+.aws/credentials

@@ -59,10 +59,31 @@ def mocked_boto3_client(service_name, region_name=None):
 
     return mock
 
-
+# @patch('src.api.models.Artifact.send_to_bucket', return_value=None)
+# @patch('src.api.s3.clear_s3_bucket', return_value=None)
 class TestAPIEndpoints(unittest.TestCase):
     """Test suite for Model Registry API endpoints"""
 
+    @classmethod
+    def setUpClass(cls):
+        cls.patch_send = patch('src.api.models.Artifact.send_to_bucket', return_value="None")
+        cls.patch_clear = patch('src.api.s3.clear_s3_bucket', return_value=None)
+        cls.patch_rate = patch('src.api.models.Artifact.rate', return_value=True)
+        cls.patch_reset = patch('src.api.app.clear_s3_bucket', return_value=None)
+        cls.mock_send = cls.patch_send.start()
+        cls.mock_clear = cls.patch_clear.start()
+        cls.mock_rate = cls.patch_rate.start()
+        cls.mock_reset = cls.patch_reset.start()
+        
+        
+        
+    @classmethod
+    def tearDownClass(cls):
+        cls.patch_send.stop()
+        cls.patch_clear.stop()
+        cls.patch_rate.stop()
+        cls.patch_reset.stop()
+    
     def setUp(self):
         """Set up test client and clear registry before each test"""
         self.app = app
@@ -70,6 +91,7 @@ class TestAPIEndpoints(unittest.TestCase):
         self.app.testing = True
         with self.app.app_context():
             Artifact.query.delete()
+            db.session.commit()
         # Push app context so authenticate endpoint and JWT machinery work
         self._ctx = self.app.app_context()
         self._ctx.push()
@@ -106,6 +128,7 @@ class TestAPIEndpoints(unittest.TestCase):
             pass
 
 
+        
 class TestTracksEndpoint(TestAPIEndpoints):
     """Test /tracks endpoint"""
 
@@ -119,7 +142,7 @@ class TestTracksEndpoint(TestAPIEndpoints):
         self.assertIsInstance(data['plannedTracks'], list)
         self.assertIn('Access control track', data['plannedTracks'])
 
-
+# @patch('src.api.s3.clear_s3_bucket', return_value=None)
 class TestRegistryResetEndpoint(TestAPIEndpoints):
     """Test /reset endpoint"""
     def test_reset_success_as_admin(self):
@@ -177,7 +200,7 @@ class TestArtifactCreateEndpoint(TestAPIEndpoints):
     def test_create_model_success(self):
         """Test POST /artifact/model creates a new model artifact"""
         test_url = "https://huggingface.co/openai/whisper-tiny"
-        payload = {'url': test_url}
+        payload = {'name': 'whisper-tiny', 'url': test_url}
         
         response = self.client.post(
             '/artifact/model',
@@ -211,7 +234,7 @@ class TestArtifactCreateEndpoint(TestAPIEndpoints):
         self.assertEqual(response.status_code, 400)
         data = json.loads(response.data)
         # app returns error under 'message'
-        self.assertIn('missing field', data.get('message', '').lower())
+        self.assertIn('missing field', data.get('error', '').lower())
 
     def test_create_model_invalid_url(self):
         """Test POST /artifact/model fails with invalid url format"""
@@ -225,21 +248,57 @@ class TestArtifactCreateEndpoint(TestAPIEndpoints):
         
         self.assertEqual(response.status_code, 400)
         data = json.loads(response.data)
-        self.assertIn('message', data)
+        self.assertIn('error', data)
 
-    # @patch('src.api.app.authenticate', return_value=False)
-    # def test_create_model_authentication_failed(self, mock_auth):
-    #     """Test POST /artifact/model fails with invalid authentication"""
-    #     payload = {'url': 'https://huggingface.co/openai/whisper-tiny'}
+    def test_create_code_success(self):
+        """Test POST /artifact/code creates a new code artifact"""
+        test_url = "https://github.com/openai/whisper"
+        payload = {'name': 'whisper-code', 'url': test_url}
         
-    #     response = self.client.post(
-    #         '/artifact/model',
-    #         headers=self.headers,
-    #         data=json.dumps(payload)
-    #     )
+        response = self.client.post(
+            '/artifact/code',
+            headers=self.headers,
+            data=json.dumps(payload)
+        )
         
-    #     self.assertEqual(response.status_code, 403)
-
+        self.assertEqual(response.status_code, 201)
+        data = json.loads(response.data)
+        self.assertIn('metadata', data)
+        self.assertIn('data', data)
+        metadata = data['metadata']
+        self.assertIn('name', metadata)
+        self.assertIn('id', metadata)
+        self.assertIn('type', metadata)
+        self.assertEqual(metadata['name'], 'whisper-code')
+        self.assertEqual(metadata['type'], 'code')
+        with self.app.app_context():
+            self.assertIsNotNone(Artifact.query.filter_by(id=metadata['id']).first())
+        self.assertEqual(data['data']['download_url'], "")
+        
+    def test_create_dataset_success(self):
+        """Test POST /artifact/dataset creates a new dataset artifact"""
+        test_url = "https://huggingface.co/datasets/tensonaut/EPSTEIN_FILES_20K"
+        payload = {'name': 'whisper-dataset', 'url': test_url}
+        
+        response = self.client.post(
+            '/artifact/dataset',
+            headers=self.headers,
+            data=json.dumps(payload)
+        )
+        
+        self.assertEqual(response.status_code, 201)
+        data = json.loads(response.data)
+        self.assertIn('metadata', data)
+        self.assertIn('data', data)
+        metadata = data['metadata']
+        self.assertIn('name', metadata)
+        self.assertIn('id', metadata)
+        self.assertIn('type', metadata)
+        self.assertEqual(metadata['name'], 'whisper-dataset')
+        self.assertEqual(metadata['type'], 'dataset')
+        with self.app.app_context():
+            self.assertIsNotNone(Artifact.query.filter_by(id=metadata['id']).first())
+        self.assertEqual(data['data']['download_url'], "")
 
 class TestArtifactRetrieveEndpoint(TestAPIEndpoints):
     """Test /artifacts/{artifact_type}/{id} GET endpoint"""
@@ -251,7 +310,7 @@ class TestArtifactRetrieveEndpoint(TestAPIEndpoints):
         create_response = self.client.post(
             '/artifact/model',
             headers=self.headers,
-            data=json.dumps({'url': test_url})
+            data=json.dumps({'name': 'whisper-tiny', 'url': test_url})
         )
         created_data = json.loads(create_response.data)
         artifact_id = created_data['metadata']['id']
@@ -277,7 +336,7 @@ class TestArtifactRetrieveEndpoint(TestAPIEndpoints):
         
         self.assertEqual(response.status_code, 404)
         data = json.loads(response.data)
-        self.assertEqual(data.get('message'), 'Artifact does not exist.')
+        self.assertEqual(data.get('error'), 'Artifact does not exist.')
 
     def test_retrieve_invalid_artifact_type(self):
         """Test GET /artifacts/{invalid_type}/{id} returns 400"""
@@ -288,7 +347,7 @@ class TestArtifactRetrieveEndpoint(TestAPIEndpoints):
         
         self.assertEqual(response.status_code, 400)
         data = json.loads(response.data)
-        self.assertIn('missing field', data.get('message', '').lower())
+        self.assertIn('missing field', data.get('error', '').lower())
 
     def test_retrieve_invalid_id_format(self):
         """Test GET /artifacts/model/{invalid_id} returns 400"""
@@ -360,7 +419,7 @@ class TestArtifactUpdateEndpoint(TestAPIEndpoints):
         
         self.assertEqual(response.status_code, 404)
         data = json.loads(response.data)
-        self.assertEqual(data.get('message'), 'Artifact does not exist.')
+        self.assertEqual(data.get('error'), 'Artifact does not exist.')
 
     def test_update_invalid_artifact_type(self):
         """Test PUT /artifacts/{invalid_type}/{id} returns 400"""
@@ -461,7 +520,7 @@ class TestArtifactsListEndpoint(TestAPIEndpoints):
         
         self.assertEqual(response.status_code, 400)
         data = json.loads(response.data)
-        self.assertIn('missing field', data.get('message', '').lower())
+        self.assertIn('missing field', data.get('error', '').lower())
 
     def test_list_artifacts_missing_types(self):
         """Test POST /artifacts fails without types field"""
