@@ -1,3 +1,9 @@
+"""Integration tests for API endpoints without AWS mocks.
+
+Performs end-to-end requests against the Flask test client using the real
+application components (no mocked S3 or external services).
+"""
+
 import unittest
 import json
 import sys

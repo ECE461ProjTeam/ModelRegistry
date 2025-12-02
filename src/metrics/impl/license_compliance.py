@@ -1,12 +1,24 @@
+"""Detect whether a model's license is compatible with project policy.
+
+This metric attempts to determine a model's license by scanning a
+local README (fetched via the huggingface helper) or by using a
+``license`` value provided in the execution ``context``; it returns a
+``MetricResult`` with the detected license in ``details`` and a
+continuous ``value`` of 1.0 when a compatible license is found.
+"""
+
 from __future__ import annotations
 from typing import Dict, Any
 from ..types import MetricResult
 from src.metrics.data_fetcher.huggingface import get_huggingface_file
 import re
 
+
 class LicenseComplianceMetric:
-    """
-    1 if a compatible license string is detected, else 0. 'compatible_licenses' may be provided in context.
+    """1 if a compatible license string is detected, else 0.
+
+    The set of compatible licenses may be overridden via
+    ``context['compatible_licenses']``.
     """
     id = "license_compliance"
 

@@ -1,3 +1,13 @@
+"""Metric execution runner utilities.
+
+This module contains helpers used to build the metric registry and to
+execute the metric computations for a given operationalization plan.
+The primary entrypoint is :func:`run_metrics` which accepts a list of
+:class:`Operationalization` objects and a ``context`` dict and returns
+the per-metric :class:`MetricResult` mapping, a NetScore summary, and
+any latency values found in the context.
+"""
+
 from __future__ import annotations
 from typing import Dict, Any, List, Tuple
 from .types import MetricResult

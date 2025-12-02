@@ -1,3 +1,9 @@
+"""
+Helpers for uploading artifacts to and generating download links for
+artifacts stored in Amazon S3. This module provides a small, focused
+surface intended for use by the ModelRegistry application to store
+artifact files (for example, model bundles) in a configured S3 bucket.
+"""
 import os
 import boto3
 from src.logger import get_logger
