@@ -356,7 +356,7 @@ class TestArtifactRetrieveEndpoint(TestAPIEndpoints):
             headers=self.headers
         )
         
-        self.assertEqual(response.status_code, 400)
+        self.assertEqual(response.status_code, 404)
 
     def test_retrieve_authentication_failed(self):
         """Test GET /artifacts/model/{id} fails with invalid authentication"""
