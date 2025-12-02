@@ -730,6 +730,36 @@ class TestSearchByRegex(TestAPIEndpoints):
         self.assertIsInstance(data, list)
         self.assertEqual(len(data), 2)
 
+    def test_search_by_regex_one(self):
+        """Test POST /artifact/byRegEx finds artifacts matching regex"""
+        # Create multiple models
+        urls = [
+            "https://huggingface.co/openai/whisper-tiny",
+            "https://huggingface.co/openai/whisper-base",
+            "https://huggingface.co/bert/bert-base"
+        ]
+        names = ["whisper-tiny", "whisper-base", "bert-base"]
+        
+        for i, url in enumerate(urls):
+            self.client.post(
+                '/artifact/model',
+                headers=self.headers,
+                data=json.dumps({'url': url, 'name': names[i]})
+            )
+
+        payload = {'regex': '.*whisper-base.*'}
+        response = self.client.post(
+            '/artifact/byRegEx',
+            headers=self.headers,
+            data=json.dumps(payload)
+        )
+        
+        self.assertEqual(response.status_code, 200)
+        data = json.loads(response.data)
+        self.assertIsInstance(data, list)
+        self.assertEqual(len(data), 1)
+        self.assertEqual(data[0]['name'], 'whisper-base')
+
     def test_search_by_regex_no_matches(self):
         """Test POST /artifact/byRegEx returns 404 when no matches"""
         urls = [
