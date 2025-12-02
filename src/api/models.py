@@ -41,6 +41,7 @@ class Artifact(db.Model):
     ndjson = db.Column(db.JSON, nullable=True)
     cost = db.Column(db.Float, nullable=True)  # in MB
     ingestible = db.Column(db.Boolean, default=False)
+    readme = db.Column(db.Text, nullable=True)
     
     def __init__(self, **kwargs):
         super().__init__(**kwargs)
@@ -106,6 +107,8 @@ class Artifact(db.Model):
         """Download model files and store them in S3."""
         logger.info(f"Downloading model files for artifact {self.id} from {self.url}")
         local_dir = download_hf_model(self.url, cache_dir="./hf_cache")
+        with open(f'{local_dir}/README.md', 'r') as f:
+            self.readme = f.read()
         if local_dir is None:
             logger.error(f"Failed to download model files for artifact {self.id} from {self.url}")
             return

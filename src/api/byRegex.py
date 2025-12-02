@@ -1,3 +1,9 @@
+"""API endpoint to get artifacts by regular expression matching.
+
+Artifacts whose names or READMEs match the provided regex are returned.
+Dangerous regex patterns are detected and rejected to prevent ReDoS attacks.
+"""
+
 from flask import Blueprint, request, jsonify
 from flask_jwt_extended import jwt_required
 from .extensions import db
@@ -9,6 +15,7 @@ from multiprocessing import Process, Queue
 from concurrent.futures import TimeoutError as FuturesTimeoutError
 from src.logger import get_logger
 from .auth import check_permissions
+from sqlalchemy import or_
 
 regex_bp = Blueprint("regex_bp", __name__)
 config = TestConfig if os.environ.get("DEBUG") == "True" else Config
@@ -119,9 +126,11 @@ def ArtifactByRegExGet():
     logger.debug(f"Searching artifacts with regex: {pattern}")
 
     if db.engine.url.get_backend_name() == "sqlite":
-        artifacts = Artifact.query.filter(Artifact.name.op("REGEXP")(pattern)).all()
+        artifacts = Artifact.query.filter(or_(Artifact.name.op("REGEXP")(pattern),
+                                              Artifact.readme.op("REGEXP")(pattern))).all()
     else:
-        artifacts = Artifact.query.filter(Artifact.name.op("~")(pattern)).all()
+        artifacts = Artifact.query.filter(or_(Artifact.name.op("~")(pattern),
+                                              Artifact.readme.op("~")(pattern))).all()
     if not artifacts:
         return jsonify({'message': 'No artifact found under this regex.'}), 404
 

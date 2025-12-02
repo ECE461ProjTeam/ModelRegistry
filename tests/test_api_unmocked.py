@@ -124,3 +124,35 @@ class TestResetEndpoint(TestAPIUnmocked):
             self.assertEqual(data.get('message'), 'Registry is reset.')
             with self.app.app_context():
                 self.assertEqual(Artifact.query.count(), 0)
+                
+class TestRegexSearchREADME(TestAPIUnmocked):
+    def test_regex_search_readme_success(self):
+        """Test POST /artifact/byRegEx successfully searches artifacts by regex in name and readme"""
+        # First, create a model artifact with a specific readme
+        test_url = "https://huggingface.co/openai/whisper-tiny"
+        readme_content = "This is a test model for speech recognition."
+        payload = {'name': 'whisper-tiny', 'url': test_url, 'readme': readme_content}
+        
+        create_response = self.client.post(
+            '/artifact/model',
+            headers=self.headers,
+            data=json.dumps(payload)
+        )
+        
+        self.assertEqual(create_response.status_code, 201)
+        
+        # Now, search for the artifact using a regex that matches the readme content
+        regex_payload = {'regex': '.*speech recognition.*'}
+        
+        search_response = self.client.post(
+            '/artifact/byRegEx',
+            headers=self.headers,
+            data=json.dumps(regex_payload)
+        )
+        
+        self.assertEqual(search_response.status_code, 200)
+        search_data = json.loads(search_response.data)
+        self.assertIsInstance(search_data, list)
+        self.assertGreaterEqual(len(search_data), 1)
+        found_names = [artifact['name'] for artifact in search_data]
+        self.assertIn('whisper-tiny', found_names)
