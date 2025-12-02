@@ -118,7 +118,10 @@ def ArtifactByRegExGet():
 
     logger.debug(f"Searching artifacts with regex: {pattern}")
 
-    artifacts = Artifact.query.filter(Artifact.name.op("REGEXP")(pattern)).all()
+    if db.engine.url.get_backend_name() == "sqlite":
+        artifacts = Artifact.query.filter(Artifact.name.op("REGEXP")(pattern)).all()
+    else:
+        artifacts = Artifact.query.filter(Artifact.name.op("~")(pattern)).all()
     if not artifacts:
         return jsonify({'message': 'No artifact found under this regex.'}), 404
 
