@@ -191,8 +191,11 @@ def RegistryReset():
 @check_permissions("search", "download")
 def ArtifactRetrieve(artifact_type, id):
     """Return this artifact."""
-    if artifact_type not in ["model", "dataset", "code"] or not id.isdigit():
+    if artifact_type not in ["model", "dataset", "code"]:
         return jsonify({'error': 'There is missing field(s) in the artifact_type or artifact_id or it is formed improperly, or is invalid.'}), 400
+
+    if not id.isdigit():
+        return jsonify({'error': 'Artifact does not exist.'}), 404
 
     artifact = Artifact.query.filter_by(id=int(id)).first()
     if not artifact:
@@ -211,8 +214,11 @@ def ArtifactRetrieve(artifact_type, id):
 @check_permissions("upload", "search")
 def ArtifactUpdate(artifact_type, id):
     """The name, version, and id must match. The artifact source (from artifact_data) will replace the previous contents."""
-    if artifact_type not in ["model", "dataset", "code"] or not id.isdigit():
+    if artifact_type not in ["model", "dataset", "code"]:
         return jsonify({'error': 'There is missing field(s) in the artifact_type or artifact_id or it is formed improperly, or is invalid.'}), 400
+    
+    if not id.isdigit():
+        return jsonify({'error': 'Artifact does not exist.'}), 404
     
     try:
         req_data = request.get_json()
@@ -244,8 +250,11 @@ def ArtifactUpdate(artifact_type, id):
 @app.route('/artifacts/<artifact_type>/<id>', methods=['DELETE'])
 @check_permissions()
 def ArtifactDelete(artifact_type, id):
-    if artifact_type not in ["model", "dataset", "code"] or not id.isdigit():
+    if artifact_type not in ["model", "dataset", "code"]:
         return jsonify({'message': 'There is missing field(s) in the artifact_type or artifact_id or invalid.'}), 400
+    
+    if not id.isdigit():
+        return jsonify({'message': 'Artifact does not exist.'}), 404
     
     artifact = Artifact.query.filter_by(id=int(id), type=artifact_type).first()
     if not artifact:
@@ -315,8 +324,11 @@ def ArtifactCreate(artifact_type):
 def ModelArtifactRate(id):
     """Get ratings for this model artifact. (BASELINE)."""
     
-    if id is None or not id.isdigit():
+    if id is None:
         return jsonify({'error': 'There is missing field(s) in the artifact_id or it is formed improperly, or is invalid.'}), 400
+    
+    if not id.isdigit():
+        return jsonify({'error': 'Artifact does not exist.'}), 404
     
     art = Artifact.query.filter_by(id=int(id)).first()
     if art is None or art.type != "model":
@@ -337,8 +349,11 @@ def ModelArtifactRate(id):
 def get_artifact_artifact_type_id_cost(artifact_type, id):
     """Get the cost of an artifact (BASELINE)."""
     
-    if artifact_type not in ["model", "dataset", "code"] or not id.isdigit():
+    if artifact_type not in ["model", "dataset", "code"]:
         return jsonify({'error': 'There is missing field(s) in the artifact_type or artifact_id or it is formed improperly, or is invalid.'}), 400
+    
+    if not id.isdigit():
+        return jsonify({'error': 'Artifact does not exist.'}), 404
     
     art = Artifact.query.filter_by(id=int(id)).first()
     if art is None or art.type != artifact_type:
@@ -379,6 +394,12 @@ def ArtifactAuditGet(artifact_type, id):
 @check_permissions("search")
 def ArtifactLineageGet(id):
     """No message provided."""
+    if id is None:
+        return jsonify({'error': 'There is missing field(s) in the artifact_id or it is formed improperly, or is invalid.'}), 400
+    
+    if not id.isdigit():
+        return jsonify({'error': 'Artifact does not exist.'}), 404
+    
     return jsonify({'message': 'Not implemented'}), 501
 
 
@@ -386,13 +407,12 @@ def ArtifactLineageGet(id):
 @check_permissions("search")
 def ArtifactLicenseCheck(id):
     """No message provided."""
-    return jsonify({'message': 'Not implemented'}), 501
-
-
-@app.route('/artifact/byRegEx', methods=['POST'])
-@check_permissions("search")
-def ArtifactByRegExGet():
-    """No message provided."""
+    if id is None:
+        return jsonify({'error': 'There is missing field(s) in the artifact_id or it is formed improperly, or is invalid.'}), 400
+    
+    if not id.isdigit():
+        return jsonify({'error': 'Artifact does not exist.'}), 404
+    
     return jsonify({'message': 'Not implemented'}), 501
 
 
