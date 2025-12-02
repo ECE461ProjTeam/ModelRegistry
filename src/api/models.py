@@ -107,17 +107,20 @@ class Artifact(db.Model):
         """Download model files and store them in S3."""
         logger.info(f"Downloading model files for artifact {self.id} from {self.url}")
         local_dir = download_hf_model(self.url, cache_dir="./hf_cache")
+
+        if local_dir is None:
+            logger.error(f"Failed to download model files for artifact {self.id} from {self.url}")
+            return
+        logger.info(f"Downloaded model files to {local_dir}")
+
         try:
             with open(f'{local_dir}/README.md', 'r') as f:
                 self.readme = f.read()
         except Exception as e:
             logger.error(f"Could not read README.md for artifact {self.id}: {e}")
             self.readme = ""
-        if local_dir is None:
-            logger.error(f"Failed to download model files for artifact {self.id} from {self.url}")
-            return
-        logger.info(f"Downloaded model files to {local_dir}")
-        
+        logger.info(f"Read README.md for artifact {self.id}")
+
         try:
             self.zip_model(local_dir)
             logger.info(f"Created zip file {self.id}.zip (size: {self.cost} MB)")
