@@ -14,6 +14,7 @@ from src.logger import get_logger
 from .models import User, TokenUsage, Artifact
 from .auth import auth_bp, create_default_admin, check_permissions
 from .health import health_bp
+from .license_check import license_check_bp
 from .config import Config, TestConfig
 from .extensions import init_extensions, db
 # from datetime import datetime, timezone
@@ -67,7 +68,7 @@ with app.app_context():
 
 app.register_blueprint(auth_bp)
 app.register_blueprint(regex_bp)
-
+app.register_blueprint(license_check_bp)
 app.register_blueprint(health_bp)
 
 @app.before_request
