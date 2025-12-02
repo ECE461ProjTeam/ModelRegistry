@@ -200,7 +200,7 @@ def ArtifactRetrieve(artifact_type, id):
     
     if artifact.type == artifact_type:
         metadata = {"id": artifact.id, "name": artifact.name, "type": artifact.type}
-        data = {"url": artifact.url}
+        data = {"url": artifact.url, "download_url": artifact.download_url}
         res = {"metadata": metadata, "data": data}
         return jsonify(res), 200
 
