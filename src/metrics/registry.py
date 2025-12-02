@@ -1,3 +1,11 @@
+"""Registry for metric implementations.
+
+This module provides a tiny in-memory registry for mapping metric
+identifiers (``metric.id``) to metric implementation objects. The
+registry is used by the metrics runner to look up the concrete metric
+class implementing a given ``metric_id``.
+"""
+
 from __future__ import annotations
 from typing import Dict
 from .types import Metric

@@ -1,3 +1,10 @@
+"""Operationalization utilities and helpers.
+
+This module defines the :class:`Operationalization` dataclass which
+encodes how a raw metric value should be interpreted by the scoring
+pipeline, plus small helper functions used by the metrics runner:
+"""
+
 from __future__ import annotations
 import os
 from dataclasses import dataclass
@@ -41,9 +48,11 @@ def normalize(value: float, op: Operationalization) -> float:
 
 
 def binarize(score: float, threshold: float | None = None) -> int:
-    """
-    Project requirement: "Each score should be either 0 or 1" (plan Table 2).
-    We produce a binary view using a threshold (default 0.5 or METRIC_THRESHOLD env).
+    """Convert a continuous score into a binary outcome.
+
+    If ``threshold`` is not provided the function reads the
+    ``METRIC_THRESHOLD`` environment variable (default ``0.5``).
+    Returns ``1`` when ``score >= threshold`` else ``0``.
     """
     if threshold is None:
         threshold = float(os.getenv("METRIC_THRESHOLD", "0.5"))

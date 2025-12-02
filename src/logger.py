@@ -1,8 +1,21 @@
-"""Logger configuration module for the ECE461 project."""
+"""Logging helpers and configured logger factory for the project.
+
+This module exposes a single convenience function, :func:`get_logger`,
+which returns a configured ``logging.Logger`` instance according to a
+small set of environment variables used by the application.
+"""
+
 import logging
 import os
+
+
 def get_logger(name: str = "team4hope") -> logging.Logger:
-    """Configure and return a logger that respects env variables."""
+    """Configure and return a logger that respects env variables.
+
+    The function reads ``LOG_LEVEL`` and ``LOG_FILE`` from the
+    environment and configures console and optional file handlers. See
+    the module docstring for behavior details.
+    """
     logger = logging.getLogger(name)
 
     if logger.hasHandlers():
