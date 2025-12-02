@@ -251,14 +251,14 @@ def ArtifactUpdate(artifact_type, id):
 @check_permissions()
 def ArtifactDelete(artifact_type, id):
     if artifact_type not in ["model", "dataset", "code"]:
-        return jsonify({'message': 'There is missing field(s) in the artifact_type or artifact_id or invalid.'}), 400
+        return jsonify({'error': 'There is missing field(s) in the artifact_type or artifact_id or invalid.'}), 400
     
     if not id.isdigit():
-        return jsonify({'message': 'Artifact does not exist.'}), 404
+        return jsonify({'error': 'Artifact does not exist.'}), 404
     
     artifact = Artifact.query.filter_by(id=int(id), type=artifact_type).first()
     if not artifact:
-        return jsonify({'message': 'Artifact does not exist.'}), 404
+        return jsonify({'error': 'Artifact does not exist.'}), 404
 
     db.session.delete(artifact)
     db.session.commit()
