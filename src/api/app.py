@@ -406,16 +406,17 @@ def ArtifactLineageGet(id):
     return jsonify({'message': 'Not implemented'}), 501
 
 
-@app.route('/artifact/model/<id>/license-check', methods=['POST'])
+# @app.route('/artifact/model/<id>/license-check', methods=['POST'])
+# @check_permissions("search")
+# def ArtifactLicenseCheck(id):
+#     """No message provided."""
+#     return jsonify({'message': 'Not implemented'}), 501
+
+
+@app.route('/artifact/byRegEx', methods=['POST'])
 @check_permissions("search")
-def ArtifactLicenseCheck(id):
+def ArtifactByRegExGet():
     """No message provided."""
-    if id is None:
-        return jsonify({'error': 'There is missing field(s) in the artifact_id or it is formed improperly, or is invalid.'}), 400
-    
-    if not id.isdigit():
-        return jsonify({'error': 'Artifact does not exist.'}), 404
-    
     return jsonify({'message': 'Not implemented'}), 501
 
 

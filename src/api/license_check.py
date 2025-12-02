@@ -39,7 +39,7 @@ def validate_github_url(github_url):
 
 
 @license_check_bp.route('/artifacts/model/<int:model_id>/license-check', methods=['POST'])
-@jwt_required(optional=True)
+@check_permissions('search')
 def license_check(model_id):
     """
     Check license compatibility between a GitHub repository and an uploaded model.
@@ -60,20 +60,20 @@ def license_check(model_id):
         502: External license information could not be retrieved
     """
     try:
-        # Manual authentication check to return 403 instead of 401 (idk if there is a better way)
-        from flask_jwt_extended import get_jwt_identity, verify_jwt_in_request
-        try:
-            verify_jwt_in_request()
-            current_user = get_jwt_identity()
-            if not current_user:
-                return jsonify({'Description': 'Authentication failed due to invalid or missing AuthenticationToken.'}), 403
-        except Exception:
-            return jsonify({'Description': 'Authentication failed due to invalid or missing AuthenticationToken.'}), 403
+        # # Manual authentication check to return 403 instead of 401 (idk if there is a better way)
+        # from flask_jwt_extended import get_jwt_identity, verify_jwt_in_request
+        # try:
+        #     verify_jwt_in_request()
+        #     current_user = get_jwt_identity()
+        #     if not current_user:
+        #         return jsonify({'Description': 'Authentication failed due to invalid or missing AuthenticationToken.'}), 403
+        # except Exception:
+        #     return jsonify({'Description': 'Authentication failed due to invalid or missing AuthenticationToken.'}), 403
             
         data = request.get_json()
-        github_url = validate_github_url((data or {}).get('github_url', '').strip())
+        github_url = (data or {}).get('github_url', '').strip()
 
-        if not github_url:
+        if not validate_github_url(github_url):
             return jsonify({'Description': 'The license check request is malformed or references an unsupported usage context.'}), 400
         
         logger.info(f"License check requested for model {model_id} against {github_url}")
@@ -108,6 +108,7 @@ def license_check(model_id):
                 }
                 result = metric.compute(context)
                 model_license = result.details.get('license') if result.details else None
+                logger.info(f"Computed license for model {model_id}: {model_license}")
             except Exception as e:
                 logger.error(f"Failed to compute license metric for model {model_id}: {e}")
                 # Continue without model license - will be handled below
