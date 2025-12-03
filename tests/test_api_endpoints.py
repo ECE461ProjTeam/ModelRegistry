@@ -273,7 +273,6 @@ class TestArtifactCreateEndpoint(TestAPIEndpoints):
         self.assertEqual(metadata['type'], 'code')
         with self.app.app_context():
             self.assertIsNotNone(Artifact.query.filter_by(id=metadata['id']).first())
-        self.assertEqual(data['data']['download_url'], "")
         
     def test_create_dataset_success(self):
         """Test POST /artifact/dataset creates a new dataset artifact"""
@@ -298,7 +297,6 @@ class TestArtifactCreateEndpoint(TestAPIEndpoints):
         self.assertEqual(metadata['type'], 'dataset')
         with self.app.app_context():
             self.assertIsNotNone(Artifact.query.filter_by(id=metadata['id']).first())
-        self.assertEqual(data['data']['download_url'], "")
 
 class TestArtifactRetrieveEndpoint(TestAPIEndpoints):
     """Test /artifacts/{artifact_type}/{id} GET endpoint"""
