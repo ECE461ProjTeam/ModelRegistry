@@ -406,11 +406,7 @@ def ArtifactLineageGet(id):
     return jsonify({'message': 'Not implemented'}), 501
 
 
-# @app.route('/artifact/model/<id>/license-check', methods=['POST'])
-# @check_permissions("search")
-# def ArtifactLicenseCheck(id):
-#     """No message provided."""
-#     return jsonify({'message': 'Not implemented'}), 501
+# /artifact/model/<id>/license-check is now implemented in license_check_bp
 
 
 @app.route('/artifact/byRegEx', methods=['POST'])
