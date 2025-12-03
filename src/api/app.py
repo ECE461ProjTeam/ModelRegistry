@@ -36,8 +36,6 @@ plannedTracks = ["Access control track"]
 app = Flask(__name__)
 
 
-
-
 if os.environ.get("DEBUG", "False") == "True":
     app.config.from_object(TestConfig)
     # Record which config we loaded so prints and tests can verify it
@@ -47,6 +45,10 @@ else:
     app.config['ACTIVE_CONFIG'] = Config.__name__
 
 logger.debug(f"App running with config: {app.config.get('ACTIVE_CONFIG')}")
+
+app.register_blueprint(auth_bp)
+app.register_blueprint(regex_bp)
+app.register_blueprint(health_bp)
 
 init_extensions(app)
 
@@ -65,10 +67,6 @@ with app.app_context():
             return reg.search(string) is not None
         conn.create_function("REGEXP", 2, regexp)
 
-app.register_blueprint(auth_bp)
-app.register_blueprint(regex_bp)
-
-app.register_blueprint(health_bp)
 
 @app.before_request
 @jwt_required(optional=True)
