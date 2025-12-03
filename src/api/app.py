@@ -36,9 +36,6 @@ plannedTracks = ["Access control track"]
 
 app = Flask(__name__)
 
-
-
-
 if os.environ.get("DEBUG", "False") == "True":
     app.config.from_object(TestConfig)
     # Record which config we loaded so prints and tests can verify it
@@ -77,7 +74,6 @@ def log_request():
     logger.info(f"Received {request.method} request for {request.path} from {request.remote_addr}")
     logger.info(f"Request body: {request.get_data(as_text=True)}")
 
-   
 @app.after_request
 @jwt_required(optional=True)
 def log_response(response):
@@ -404,10 +400,6 @@ def ArtifactLineageGet(id):
         return jsonify({'error': 'Artifact does not exist.'}), 404
     
     return jsonify({'message': 'Not implemented'}), 501
-
-
-# /artifact/model/<id>/license-check is now implemented in license_check_bp
-
 
 @app.route('/artifact/byRegEx', methods=['POST'])
 @check_permissions("search")
