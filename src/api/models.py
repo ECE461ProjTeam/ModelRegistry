@@ -102,10 +102,9 @@ class Artifact(db.Model):
         """Download model files and store them in S3."""
         if self.type != "model":
             logger.info(f"Artifact {self.id} is of type {self.type}; skipping file download")
-            local_dir = f"./hf_cache/datasets--{self.name}"
-            if not os.path.exists(local_dir):
-                os.mkdir(local_dir)
-            logger.info(f"Creating placeholder files for dataset artifact {self.id}")
+            local_dir = f"./hf_cache/{self.type}--{self.name}"
+            os.makedirs(local_dir, exist_ok=True)
+            logger.info(f"Creating placeholder files for {self.type} artifact {self.id}")
             with open(f"{local_dir}/{self.name}_metadata.txt", 'w+') as f:
                 f.write("Name: " + self.name + "\n" + "URL: " + self.url + "\n" + "Type: " + self.type + "\n")
         
