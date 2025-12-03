@@ -64,7 +64,7 @@ class TestConfig(Config):
     
     # Shorten token expiry and request limits for testing
     TOKEN_EXPIRE_SECONDS = int(os.environ.get("TEST_TOKEN_EXPIRE_SECONDS", 600))
-    MAX_REQUESTS_PER_TOKEN = int(os.environ.get("TEST_MAX_REQUESTS_PER_TOKEN", 10))
+    MAX_REQUESTS_PER_TOKEN = int(os.environ.get("TEST_MAX_REQUESTS_PER_TOKEN", 100))
     
     # Tests should also use X-Authorization header
     JWT_HEADER_NAME = "X-Authorization"

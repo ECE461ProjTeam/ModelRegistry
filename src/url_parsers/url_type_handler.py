@@ -21,8 +21,9 @@ from src.cli.schema import default_ndjson
 from src.metrics.ops_plan import default_ops
 from src.metrics.runner import run_metrics
 from src.metrics.data_fetcher import fetch_comprehensive_metrics_data
+from src.logger import get_logger
 
-logger = logging.getLogger(__name__)
+logger = get_logger(__name__)
 
 UrlCategory = Literal["MODEL", "DATASET", "CODE"]
 
@@ -168,7 +169,8 @@ def handle_url(models: Dict[str, List[Optional[str]]]) -> Dict[str, dict]:
 
     Returns a dict keyed by the same ids as `models`.
     """
-    categories = get_url_category(models)
+    # Unneeded since name & type set outside this function
+    # categories = get_url_category(models) 
     ndjsons: Dict[str, dict] = {}
 
     for key, links in models.items():
@@ -198,7 +200,7 @@ def handle_url(models: Dict[str, List[Optional[str]]]) -> Dict[str, dict]:
             "code_quality": "github_latency",
             "reviewedness": "github_latency",
             # "reproducibility": "github_latency",
-            # "treescore": "github_latency",
+            # "tree_score": "github_latency",
         }
 
         results, summary, latencies = run_metrics(default_ops, context=context)
@@ -251,11 +253,11 @@ def handle_url(models: Dict[str, List[Optional[str]]]) -> Dict[str, dict]:
             "reviewedness_latency": get_latency("reviewedness"),
             "reproducibility": get_metric("reproducibility"),
             "reproducibility_latency": reproducibility_seconds,
-            "treescore": get_metric("treescore"),
-            "treescore_latency": get_latency("treescore"),
+            "tree_score": get_metric("tree_score"),
+            "tree_score_latency": get_latency("tree_score"),
         }
 
         ndjsons[key] = default_ndjson(
-            model=model_url, category=categories.get(key), **ndjson_args)
+            model=model_url, **ndjson_args)
 
     return ndjsons

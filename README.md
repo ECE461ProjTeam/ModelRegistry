@@ -12,6 +12,10 @@ pip install -r requirements.txt
 - `LOG_VERBOSITY` - Verbosity of logging (0 - silent, 1 - INFO, 2 - DEBUG)
 - `GITHUB_TOKEN` - Your GitHub token
 - `GEN_AI_STUDIO_API_KEY` - Purdue GenAI Studio API key 
+- `AWS_CONFIG_FILE=.aws/config`
+- `AWS_ACCESS_KEY_ID`
+- `AWS_SECRET_ACCESS_KEY`
+- `BUCKET_NAME=ece461team-model-registry-storage`
 
 Note: You can obtain the `GEN_AI_STUDIO_API_KEY` at https://genai.rcac.purdue.edu/ by logging in to your Purdue student account, click on your profile -> Settings -> Account -> API Keys and then create one.
 

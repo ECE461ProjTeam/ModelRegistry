@@ -6,6 +6,11 @@ jobs:
     env:
       DEFAULT_USER: ${{ secrets.DEFAULT_USER }}
       DEFAULT_PASSWORD: ${{ secrets.DEFAULT_PASSWORD }}
+      BUCKET_NAME: ${{ secrets.BUCKET_NAME }}
+      AWS_ACCESS_KEY_ID: ${{ secrets.AWS_ACCESS_KEY_ID }}
+      AWS_SECRET_ACCESS_KEY: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+      LOG_LEVEL: 2
+      AWS_CONFIG_FILE: .aws/config
     steps:
       # Backend (Python) tests
       - uses: actions/checkout@v4
@@ -17,7 +22,7 @@ jobs:
           python -m pip install --upgrade pip
           pip install -r requirements.txt
       - name: Run backend tests
-        run: pytest
+        run: pytest --capture=sys -v
       
  
 

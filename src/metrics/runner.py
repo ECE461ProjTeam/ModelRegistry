@@ -1,3 +1,13 @@
+"""Metric execution runner utilities.
+
+This module contains helpers used to build the metric registry and to
+execute the metric computations for a given operationalization plan.
+The primary entrypoint is :func:`run_metrics` which accepts a list of
+:class:`Operationalization` objects and a ``context`` dict and returns
+the per-metric :class:`MetricResult` mapping, a NetScore summary, and
+any latency values found in the context.
+"""
+
 from __future__ import annotations
 from typing import Dict, Any, List, Tuple
 from .types import MetricResult
@@ -23,7 +33,7 @@ def build_registry_from_plan() -> MetricRegistry:
     from .impl.performance_claims import PerformanceClaimsMetric
     from .impl.reviewedness import ReviewednessMetric
     from .impl.reproducibility import ReproducibilityMetric
-    from .impl.treescore import TreescoreMetric
+    from .impl.tree_score import TreeScoreMetric
 
     reg = MetricRegistry()
     reg.register(SizeMetric())
@@ -36,7 +46,7 @@ def build_registry_from_plan() -> MetricRegistry:
     reg.register(PerformanceClaimsMetric())
     reg.register(ReviewednessMetric())
     reg.register(ReproducibilityMetric())
-    reg.register(TreescoreMetric())
+    reg.register(TreeScoreMetric())
     return reg
 
 

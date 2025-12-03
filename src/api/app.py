@@ -10,17 +10,19 @@ platforms like Elastic Beanstalk) can discover the callable.
 
 from flask import Flask, jsonify, request
 from flask_jwt_extended import jwt_required, get_jwt, verify_jwt_in_request
-from .classes import *
 from src.logger import get_logger
 from .models import User, TokenUsage, Artifact
 from .auth import auth_bp, create_default_admin, check_permissions
+from .health import health_bp
 from .config import Config, TestConfig
 from .extensions import init_extensions, db
-from src.url_parsers.url_type_handler import handle_url
-import pickle
 # from datetime import datetime, timezone
 from dotenv import load_dotenv
+from .s3 import clear_s3_bucket
 import os
+import re
+from sqlalchemy import event
+from .byRegex import regex_bp
 
 # `override=True` ensures edits to the .env file replace current os.environ values
 load_dotenv(override=True)
@@ -55,8 +57,18 @@ with app.app_context():
     if not admin_user:
         create_default_admin()
 
-app.register_blueprint(auth_bp)
+    # Enable REGEXP support for SQLite
+    @event.listens_for(db.engine, "connect")
+    def sqlite_enable_regex(conn, record):
+        def regexp(pattern, string):
+            reg = re.compile(pattern)
+            return reg.search(string) is not None
+        conn.create_function("REGEXP", 2, regexp)
 
+app.register_blueprint(auth_bp)
+app.register_blueprint(regex_bp)
+
+app.register_blueprint(health_bp)
 
 @app.before_request
 @jwt_required(optional=True)
@@ -121,12 +133,6 @@ def index():
     return jsonify({'message': 'Model Registry API is running'}), 200
 
 
-@app.route('/health', methods=['GET'])
-def health():
-    """Health check route."""
-    return jsonify({'message': 'Service reachable.'}), 200
-
-
 @app.route('/artifacts', methods=['POST'])
 @check_permissions('search')
 def ArtifactsList():
@@ -151,7 +157,7 @@ def ArtifactsList():
         if name is None:
             raise ValueError("Missing fields")
     except Exception as e:
-        return jsonify({'message': 'There is missing field(s) in the artifact_query or it is formed improperly, or is invalid.'}), 400
+        return jsonify({'error': 'There is missing field(s) in the artifact_query or it is formed improperly, or is invalid.'}), 400
 
     if len(types) == 0:
         types = ["model", "dataset", "code"]
@@ -174,6 +180,11 @@ def RegistryReset():
     db.session.query(Artifact).delete()
     db.session.commit()
     # model_registry.clear()
+    try:
+        clear_s3_bucket()
+    except Exception as e:
+        logger.error(f"Error clearing S3 bucket during reset: {e}")
+        return jsonify({'error': 'Failed to reset the registry due to S3 error.'}), 500
 
     return jsonify({'message': 'Registry is reset.'}), 200
 
@@ -182,28 +193,34 @@ def RegistryReset():
 @check_permissions("search", "download")
 def ArtifactRetrieve(artifact_type, id):
     """Return this artifact."""
-    if artifact_type not in ["model", "dataset", "code"] or not id.isdigit():
-        return jsonify({'message': 'There is missing field(s) in the artifact_type or artifact_id or it is formed improperly, or is invalid.'}), 400
+    if artifact_type not in ["model", "dataset", "code"]:
+        return jsonify({'error': 'There is missing field(s) in the artifact_type or artifact_id or it is formed improperly, or is invalid.'}), 400
+
+    if not id.isdigit():
+        return jsonify({'error': 'Artifact does not exist.'}), 404
 
     artifact = Artifact.query.filter_by(id=int(id)).first()
     if not artifact:
-        return jsonify({'message': 'Artifact does not exist.'}), 404
-    try:
-        if artifact.type == artifact_type:
-            metadata = {"id": artifact.id, "name": artifact.name, "type": artifact.type}
-            return jsonify(metadata), 200
-    except Exception as e:
-        pass
+        return jsonify({'error': 'Artifact does not exist.'}), 404
+    
+    if artifact.type == artifact_type:
+        metadata = {"id": artifact.id, "name": artifact.name, "type": artifact.type}
+        data = {"url": artifact.url, "download_url": artifact.download_url}
+        res = {"metadata": metadata, "data": data}
+        return jsonify(res), 200
 
-    return jsonify({'message': 'Artifact does not exist.'}), 404
+    return jsonify({'error': 'Artifact does not exist.'}), 404
 
 
 @app.route('/artifacts/<artifact_type>/<id>', methods=['PUT'])
 @check_permissions("upload", "search")
 def ArtifactUpdate(artifact_type, id):
     """The name, version, and id must match. The artifact source (from artifact_data) will replace the previous contents."""
-    if artifact_type not in ["model", "dataset", "code"] or not id.isdigit():
-        return jsonify({'message': 'There is missing field(s) in the artifact_type or artifact_id or it is formed improperly, or is invalid.'}), 400
+    if artifact_type not in ["model", "dataset", "code"]:
+        return jsonify({'error': 'There is missing field(s) in the artifact_type or artifact_id or it is formed improperly, or is invalid.'}), 400
+    
+    if not id.isdigit():
+        return jsonify({'error': 'Artifact does not exist.'}), 404
     
     try:
         req_data = request.get_json()
@@ -229,14 +246,29 @@ def ArtifactUpdate(artifact_type, id):
         #TODO: return code on wrong request body
         #TODO: update S3 files if url is changed
 
-    return jsonify({'message': 'Artifact does not exist.'}), 404
+    return jsonify({'error': 'Artifact does not exist.'}), 404
 
 # NON-BASELINE
 @app.route('/artifacts/<artifact_type>/<id>', methods=['DELETE'])
 @check_permissions()
 def ArtifactDelete(artifact_type, id):
-    """Delete only the artifact that matches 'id'. (id is a unique identifier for an artifact)."""    
-    return jsonify({'message': 'Not implemented'}), 501
+    if artifact_type not in ["model", "dataset", "code"]:
+        return jsonify({'error': 'There is missing field(s) in the artifact_type or artifact_id or invalid.'}), 400
+    
+    if not id.isdigit():
+        return jsonify({'error': 'Artifact does not exist.'}), 404
+    
+    artifact = Artifact.query.filter_by(id=int(id), type=artifact_type).first()
+    if not artifact:
+        return jsonify({'error': 'Artifact does not exist.'}), 404
+
+    db.session.delete(artifact)
+    db.session.commit()
+
+    if Artifact.query.filter_by(id=int(id), type=artifact_type).first():
+        return jsonify({'message': 'Deletion failed.'}), 500
+    
+    return jsonify({'message': 'Artifact is deleted.'}), 200
 
 
 @app.route('/artifact/<artifact_type>', methods=['POST'])
@@ -248,36 +280,43 @@ def ArtifactCreate(artifact_type):
     try:
         logger.info(f"Creating new artifact of type {artifact_type}")
         data = request.get_json()
-        url = data.get("url")
+        url = data.get("url", None)
+        if url is None:
+            raise ValueError("Missing fields")
         name = data.get("name", None)
-        if artifact_type == "model":
-            newArtifact = Model(url, name)
-        elif artifact_type == "dataset":
-            newArtifact = Dataset(url, name)
-        elif artifact_type == "code":
-            newArtifact = Code(url, name)
-        else:
-            return jsonify({'message': 'Invalid artifact_type.'}), 400
+        if artifact_type not in ["model", "dataset", "code"]:
+            return jsonify({'error': 'Invalid artifact_type.'}), 400
     except Exception as e:
         logger.error(f"Error creating artifact: {e}")
-        return jsonify({'message': 'There is missing field(s) in the artifact_data or it is formed improperly (must include a single url)'}), 400
-
-    #TODO: route to PostgreSQL database later
-    artifact_db = Artifact(id = int(newArtifact.id), url=newArtifact.url, 
-                           type=newArtifact.type, 
-                           download_url=newArtifact.download_url,
-                           name=newArtifact.name)
+        return jsonify({'error': 'There is missing field(s) in the artifact_data or it is formed improperly (must include a single url)'}), 400
     
-    try:
-        db.session.add(artifact_db)
-        db.session.commit()
-    except Exception as e:
-        logger.error(f"Error saving artifact to database: {e}")
-        return jsonify({'message': 'Failed to save artifact to database.'}), 500
+    if artifact_type == "model" and Artifact.is_valid_hf_url(url) is False:
+            return jsonify({'error': 'The provided URL is not a valid Hugging Face model URL.'}), 400
+        
+    if artifact_type == "code" and Artifact.is_valid_git_url(url) is False:
+            return jsonify({'error': 'The provided URL is not a valid Git repository URL.'}), 400
+        
+    if artifact_type == "dataset" and Artifact.is_valid_url(url) is False:
+            return jsonify({'error': 'The provided URL is not a valid HTTP/HTTPS URL.'}), 400
+
+    artifact_db = Artifact(id = Artifact.make_id(), url=url, 
+                           type=artifact_type, 
+                           download_url="",
+                           name=name)
+    
+    if artifact_db.ingestible:
+        try:
+            db.session.add(artifact_db)
+            db.session.commit()
+        except Exception as e:
+            logger.error(f"Error saving artifact to database: {e}")
+            return jsonify({'error': 'Failed to save artifact to database.'}), 500
+    else:
+        return jsonify({'error': 'Artifact is not registered due to the disqualified rating.'}), 424
     
     result = {}
-    result["metadata"] = newArtifact.metadata
-    result["data"] = {"url": newArtifact.url, "download_url": newArtifact.download_url}
+    result["metadata"] = {"id": artifact_db.id, "name": artifact_db.name, "type": artifact_db.type}
+    result["data"] = {"url": artifact_db.url, "download_url": artifact_db.download_url}
 
     return jsonify(result), 201
     
@@ -286,54 +325,102 @@ def ArtifactCreate(artifact_type):
 @check_permissions("search")
 def ModelArtifactRate(id):
     """Get ratings for this model artifact. (BASELINE)."""
-    return jsonify({'message': 'Not implemented'}), 501
+    
+    if id is None:
+        return jsonify({'error': 'There is missing field(s) in the artifact_id or it is formed improperly, or is invalid.'}), 400
+    
+    if not id.isdigit():
+        return jsonify({'error': 'Artifact does not exist.'}), 404
+    
+    art = Artifact.query.filter_by(id=int(id)).first()
+    if art is None or art.type != "model":
+        return jsonify({'error': 'Artifact does not exist.'}), 404
+
+    if not art.rate():
+        return jsonify({'error': 'The artifact rating system encountered an error while computing at least one metric.'}), 500
+
+    if not art.check_ingestible():
+        logger.error(f"Artifact {id} is not ingestible after rating.")
+        # return jsonify({'message': 'Artifact is not ingestible due to the disqualified rating.'}), 424
+
+    return jsonify(art.ndjson), 200
 
 
 @app.route('/artifact/<artifact_type>/<id>/cost', methods=['GET'])
 @check_permissions("search")
 def get_artifact_artifact_type_id_cost(artifact_type, id):
     """Get the cost of an artifact (BASELINE)."""
-    return jsonify({'message': 'Not implemented'}), 501
+    
+    if artifact_type not in ["model", "dataset", "code"]:
+        return jsonify({'error': 'There is missing field(s) in the artifact_type or artifact_id or it is formed improperly, or is invalid.'}), 400
+    
+    if not id.isdigit():
+        return jsonify({'error': 'Artifact does not exist.'}), 404
+    
+    art = Artifact.query.filter_by(id=int(id)).first()
+    if art is None or art.type != artifact_type:
+        return jsonify({'error': 'Artifact does not exist.'}), 404
+    
+    result = {}
+    result[id] = {"total_cost": art.cost}
+    return jsonify(result), 200
 
 
 @app.route('/artifact/byName/<name>', methods=['GET'])
 @check_permissions("search")
 def ArtifactByNameGet(name):
     """Return metadata for each version matching this artifact name."""
-    return jsonify({'message': 'Not implemented'}), 501
+    if not name:
+        return jsonify({'message': 'There is missing field(s) in the artifact_name or it is formed improperly, or is invalid.'}), 400
+
+    if name == "*":
+        artifacts = Artifact.query.all()
+    else:
+        artifacts = Artifact.query.filter_by(name=name).all()
+
+    if not artifacts:
+        return jsonify({'message': 'No such artifact.'}), 404    
+    
+    res = [{"name": art.name, "id": art.id, "type": art.type} for art in artifacts]
+    return jsonify(res), 200
 
 
 @app.route('/artifact/<artifact_type>/<id>/audit', methods=['GET'])
 @check_permissions("search")
 def ArtifactAuditGet(artifact_type, id):
-    """No description provided."""
+    """No message provided."""
     return jsonify({'message': 'Not implemented'}), 501
 
 
 @app.route('/artifact/model/<id>/lineage', methods=['GET'])
 @check_permissions("search")
 def ArtifactLineageGet(id):
-    """No description provided."""
+    """No message provided."""
+    if id is None:
+        return jsonify({'error': 'There is missing field(s) in the artifact_id or it is formed improperly, or is invalid.'}), 400
+    
+    if not id.isdigit():
+        return jsonify({'error': 'Artifact does not exist.'}), 404
+    
     return jsonify({'message': 'Not implemented'}), 501
 
 
 @app.route('/artifact/model/<id>/license-check', methods=['POST'])
 @check_permissions("search")
 def ArtifactLicenseCheck(id):
-    """No description provided."""
-    return jsonify({'message': 'Not implemented'}), 501
-
-
-@app.route('/artifact/byRegEx', methods=['POST'])
-@check_permissions("search")
-def ArtifactByRegExGet():
-    """No description provided."""
+    """No message provided."""
+    if id is None:
+        return jsonify({'error': 'There is missing field(s) in the artifact_id or it is formed improperly, or is invalid.'}), 400
+    
+    if not id.isdigit():
+        return jsonify({'error': 'Artifact does not exist.'}), 404
+    
     return jsonify({'message': 'Not implemented'}), 501
 
 
 @app.route('/tracks', methods=['GET'])
 def get_tracks():
-    """No description provided."""
+    """No message provided."""
     try:
         return jsonify({"plannedTracks": plannedTracks}), 200
     except Exception as e:

@@ -16,11 +16,74 @@ from src.api.app import app
 from src.api.models import User, TokenUsage, Artifact
 from flask_jwt_extended import get_jti
 from src.api.extensions import db
+from unittest.mock import patch, MagicMock
 
 
+# Helper to mock boto3.client calls for health endpoints so tests do not call AWS
+def mocked_boto3_client(service_name, region_name=None):
+    mock = MagicMock()
+
+    if service_name == "elasticbeanstalk":
+        # describe_environment_resources used to get Instances and LoadBalancers
+        mock.describe_environment_resources.return_value = {
+            "EnvironmentResources": {
+                "Instances": [{"Id": "i-0123456789abcdef0"}],
+                "LoadBalancers": [{"Name": "arn:aws:elasticloadbalancing:us-east-2:123456789012:loadbalancer/app/myalb/50dc6c495c0c9188"}]
+            }
+        }
+        mock.describe_environment_health.return_value = {"Status": "Green", "Color": "Green"}
+        mock.describe_events.return_value = {"Events": [{"Message": "Mock event", "EventDate": "2025-01-01T00:00:00Z"}]}
+
+    if service_name == "cloudwatch":
+        # get_metric_statistics returns datapoints for metrics; support both Average and Sum
+        def get_metric_statistics(**kwargs):
+            metric = kwargs.get("MetricName", "")
+            if metric == 'CPUUtilization':
+                return {"Datapoints": [{"Average": 10.0}], "Label": metric}
+            if metric == 'WriteLatency':
+                return {"Datapoints": [{"Average": 0.1}], "Label": metric}
+            if metric == 'RequestCount':
+                return {"Datapoints": [{"Sum": 5}], "Label": metric}
+            return {"Datapoints": []}
+
+        mock.get_metric_statistics.side_effect = get_metric_statistics
+
+    if service_name == "s3":
+        # paginator for list_objects_v2
+        paginator = MagicMock()
+        paginator.paginate.return_value = [{"Contents": [{"Size": 100}, {"Size": 200}]}]
+        mock.get_paginator.return_value = paginator
+
+    if service_name == "logs":
+        mock.filter_log_events.return_value = {"events": [{"message": "log message", "timestamp": 1234567890}]}
+
+    return mock
+
+# @patch('src.api.models.Artifact.send_to_bucket', return_value=None)
+# @patch('src.api.s3.clear_s3_bucket', return_value=None)
 class TestAPIEndpoints(unittest.TestCase):
     """Test suite for Model Registry API endpoints"""
 
+    @classmethod
+    def setUpClass(cls):
+        cls.patch_send = patch('src.api.models.Artifact.send_to_bucket', return_value="None")
+        cls.patch_clear = patch('src.api.s3.clear_s3_bucket', return_value=None)
+        cls.patch_rate = patch('src.api.models.Artifact.rate', return_value=True)
+        cls.patch_reset = patch('src.api.app.clear_s3_bucket', return_value=None)
+        cls.mock_send = cls.patch_send.start()
+        cls.mock_clear = cls.patch_clear.start()
+        cls.mock_rate = cls.patch_rate.start()
+        cls.mock_reset = cls.patch_reset.start()
+        
+        
+        
+    @classmethod
+    def tearDownClass(cls):
+        cls.patch_send.stop()
+        cls.patch_clear.stop()
+        cls.patch_rate.stop()
+        cls.patch_reset.stop()
+    
     def setUp(self):
         """Set up test client and clear registry before each test"""
         self.app = app
@@ -28,6 +91,7 @@ class TestAPIEndpoints(unittest.TestCase):
         self.app.testing = True
         with self.app.app_context():
             Artifact.query.delete()
+            db.session.commit()
         # Push app context so authenticate endpoint and JWT machinery work
         self._ctx = self.app.app_context()
         self._ctx.push()
@@ -64,6 +128,7 @@ class TestAPIEndpoints(unittest.TestCase):
             pass
 
 
+        
 class TestTracksEndpoint(TestAPIEndpoints):
     """Test /tracks endpoint"""
 
@@ -77,7 +142,7 @@ class TestTracksEndpoint(TestAPIEndpoints):
         self.assertIsInstance(data['plannedTracks'], list)
         self.assertIn('Access control track', data['plannedTracks'])
 
-
+# @patch('src.api.s3.clear_s3_bucket', return_value=None)
 class TestRegistryResetEndpoint(TestAPIEndpoints):
     """Test /reset endpoint"""
     def test_reset_success_as_admin(self):
@@ -135,7 +200,7 @@ class TestArtifactCreateEndpoint(TestAPIEndpoints):
     def test_create_model_success(self):
         """Test POST /artifact/model creates a new model artifact"""
         test_url = "https://huggingface.co/openai/whisper-tiny"
-        payload = {'url': test_url}
+        payload = {'name': 'whisper-tiny', 'url': test_url}
         
         response = self.client.post(
             '/artifact/model',
@@ -169,7 +234,7 @@ class TestArtifactCreateEndpoint(TestAPIEndpoints):
         self.assertEqual(response.status_code, 400)
         data = json.loads(response.data)
         # app returns error under 'message'
-        self.assertIn('missing field', data.get('message', '').lower())
+        self.assertIn('missing field', data.get('error', '').lower())
 
     def test_create_model_invalid_url(self):
         """Test POST /artifact/model fails with invalid url format"""
@@ -183,21 +248,57 @@ class TestArtifactCreateEndpoint(TestAPIEndpoints):
         
         self.assertEqual(response.status_code, 400)
         data = json.loads(response.data)
-        self.assertIn('message', data)
+        self.assertIn('error', data)
 
-    # @patch('src.api.app.authenticate', return_value=False)
-    # def test_create_model_authentication_failed(self, mock_auth):
-    #     """Test POST /artifact/model fails with invalid authentication"""
-    #     payload = {'url': 'https://huggingface.co/openai/whisper-tiny'}
+    def test_create_code_success(self):
+        """Test POST /artifact/code creates a new code artifact"""
+        test_url = "https://github.com/openai/whisper"
+        payload = {'name': 'whisper-code', 'url': test_url}
         
-    #     response = self.client.post(
-    #         '/artifact/model',
-    #         headers=self.headers,
-    #         data=json.dumps(payload)
-    #     )
+        response = self.client.post(
+            '/artifact/code',
+            headers=self.headers,
+            data=json.dumps(payload)
+        )
         
-    #     self.assertEqual(response.status_code, 403)
-
+        self.assertEqual(response.status_code, 201)
+        data = json.loads(response.data)
+        self.assertIn('metadata', data)
+        self.assertIn('data', data)
+        metadata = data['metadata']
+        self.assertIn('name', metadata)
+        self.assertIn('id', metadata)
+        self.assertIn('type', metadata)
+        self.assertEqual(metadata['name'], 'whisper-code')
+        self.assertEqual(metadata['type'], 'code')
+        with self.app.app_context():
+            self.assertIsNotNone(Artifact.query.filter_by(id=metadata['id']).first())
+        self.assertEqual(data['data']['download_url'], "")
+        
+    def test_create_dataset_success(self):
+        """Test POST /artifact/dataset creates a new dataset artifact"""
+        test_url = "https://huggingface.co/datasets/tensonaut/EPSTEIN_FILES_20K"
+        payload = {'name': 'whisper-dataset', 'url': test_url}
+        
+        response = self.client.post(
+            '/artifact/dataset',
+            headers=self.headers,
+            data=json.dumps(payload)
+        )
+        
+        self.assertEqual(response.status_code, 201)
+        data = json.loads(response.data)
+        self.assertIn('metadata', data)
+        self.assertIn('data', data)
+        metadata = data['metadata']
+        self.assertIn('name', metadata)
+        self.assertIn('id', metadata)
+        self.assertIn('type', metadata)
+        self.assertEqual(metadata['name'], 'whisper-dataset')
+        self.assertEqual(metadata['type'], 'dataset')
+        with self.app.app_context():
+            self.assertIsNotNone(Artifact.query.filter_by(id=metadata['id']).first())
+        self.assertEqual(data['data']['download_url'], "")
 
 class TestArtifactRetrieveEndpoint(TestAPIEndpoints):
     """Test /artifacts/{artifact_type}/{id} GET endpoint"""
@@ -209,7 +310,7 @@ class TestArtifactRetrieveEndpoint(TestAPIEndpoints):
         create_response = self.client.post(
             '/artifact/model',
             headers=self.headers,
-            data=json.dumps({'url': test_url})
+            data=json.dumps({'name': 'whisper-tiny', 'url': test_url})
         )
         created_data = json.loads(create_response.data)
         artifact_id = created_data['metadata']['id']
@@ -221,7 +322,7 @@ class TestArtifactRetrieveEndpoint(TestAPIEndpoints):
         )
         
         self.assertEqual(response.status_code, 200)
-        data = json.loads(response.data)
+        data = json.loads(response.data)["metadata"]
         self.assertEqual(data['name'], 'whisper-tiny')
         self.assertEqual(data['id'], artifact_id)
         self.assertEqual(data['type'], 'model')
@@ -235,7 +336,7 @@ class TestArtifactRetrieveEndpoint(TestAPIEndpoints):
         
         self.assertEqual(response.status_code, 404)
         data = json.loads(response.data)
-        self.assertEqual(data.get('message'), 'Artifact does not exist.')
+        self.assertEqual(data.get('error'), 'Artifact does not exist.')
 
     def test_retrieve_invalid_artifact_type(self):
         """Test GET /artifacts/{invalid_type}/{id} returns 400"""
@@ -246,7 +347,7 @@ class TestArtifactRetrieveEndpoint(TestAPIEndpoints):
         
         self.assertEqual(response.status_code, 400)
         data = json.loads(response.data)
-        self.assertIn('missing field', data.get('message', '').lower())
+        self.assertIn('missing field', data.get('error', '').lower())
 
     def test_retrieve_invalid_id_format(self):
         """Test GET /artifacts/model/{invalid_id} returns 400"""
@@ -255,7 +356,7 @@ class TestArtifactRetrieveEndpoint(TestAPIEndpoints):
             headers=self.headers
         )
         
-        self.assertEqual(response.status_code, 400)
+        self.assertEqual(response.status_code, 404)
 
     def test_retrieve_authentication_failed(self):
         """Test GET /artifacts/model/{id} fails with invalid authentication"""
@@ -318,7 +419,7 @@ class TestArtifactUpdateEndpoint(TestAPIEndpoints):
         
         self.assertEqual(response.status_code, 404)
         data = json.loads(response.data)
-        self.assertEqual(data.get('message'), 'Artifact does not exist.')
+        self.assertEqual(data.get('error'), 'Artifact does not exist.')
 
     def test_update_invalid_artifact_type(self):
         """Test PUT /artifacts/{invalid_type}/{id} returns 400"""
@@ -419,7 +520,7 @@ class TestArtifactsListEndpoint(TestAPIEndpoints):
         
         self.assertEqual(response.status_code, 400)
         data = json.loads(response.data)
-        self.assertIn('missing field', data.get('message', '').lower())
+        self.assertIn('missing field', data.get('error', '').lower())
 
     def test_list_artifacts_missing_types(self):
         """Test POST /artifacts fails without types field"""
@@ -520,6 +621,279 @@ class TestEdgeCases(TestAPIEndpoints):
         
         self.assertEqual(response.status_code, 404)
 
+class TestSearchByName(TestAPIEndpoints):
+    """Test /artifact/byName/<name> GET endpoint"""
+
+    def test_search_by_name_success(self):
+        """Test POST /artifact/searchByName finds artifacts by name pattern"""
+        # Create multiple models
+        urls = [
+            "https://huggingface.co/openai/whisper-tiny",
+            "https://huggingface.co/openai/whisper-base",
+            "https://huggingface.co/bert/bert-base"
+        ]
+        names = ["whisper-tiny", "whisper-base", "bert-base"]
+        
+        for i, url in enumerate(urls):
+            self.client.post(
+                '/artifact/model',
+                headers=self.headers,
+                data=json.dumps({'url': url, 'name': names[i]})
+            )
+
+        response = self.client.get(
+            '/artifact/byName/whisper-tiny',
+            headers=self.headers,
+        )
+        
+        self.assertEqual(response.status_code, 200)
+        data = json.loads(response.data)
+        self.assertIsInstance(data, list)
+        self.assertEqual(len(data), 1)
+
+    def test_search_all(self):
+        """Test GET /artifact/byName/* returns all artifacts (wildcard search)."""
+        urls = [
+            "https://huggingface.co/openai/whisper-tiny",
+            "https://huggingface.co/openai/whisper-base",
+            "https://huggingface.co/bert/bert-base"
+        ]
+        names = ["whisper-tiny", "whisper-base", "bert-base"]
+        
+        for i, url in enumerate(urls):
+            self.client.post(
+                '/artifact/model',
+                headers=self.headers,
+                data=json.dumps({'url': url, 'name': names[i]})
+            )
+        response = self.client.get(
+            '/artifact/byName/*',
+            headers=self.headers,
+        )
+        self.assertEqual(response.status_code, 200)
+        data = json.loads(response.data)
+        self.assertIsInstance(data, list)
+        self.assertGreaterEqual(len(data), 3)
+
+    def test_search_by_name_no_matches(self):
+        """Test GET /artifact/byName returns 404 when no matches"""
+        urls = [
+            "https://huggingface.co/openai/whisper-tiny",
+            "https://huggingface.co/openai/whisper-base",
+            "https://huggingface.co/bert/bert-base"
+        ]
+        names = ["whisper-tiny", "whisper-base", "bert-base"]
+        
+        for i, url in enumerate(urls):
+            self.client.post(
+                '/artifact/model',
+                headers=self.headers,
+                data=json.dumps({'url': url, 'name': names[i]})
+            )
+        response = self.client.get(
+            '/artifact/byName/nonexistent',
+            headers=self.headers,
+        )
+        
+        self.assertEqual(response.status_code, 404)
+
+
+class TestSearchByRegex(TestAPIEndpoints):
+    """Test /artifact/byRegEx POST endpoint"""
+
+    def test_search_by_regex_success(self):
+        """Test POST /artifact/byRegEx finds artifacts matching regex"""
+        # Create multiple models
+        urls = [
+            "https://huggingface.co/openai/whisper-tiny",
+            "https://huggingface.co/openai/whisper-base",
+            "https://huggingface.co/bert/bert-base"
+        ]
+        names = ["whisper-tiny", "whisper-base", "bert-base"]
+        
+        for i, url in enumerate(urls):
+            self.client.post(
+                '/artifact/model',
+                headers=self.headers,
+                data=json.dumps({'url': url, 'name': names[i]})
+            )
+
+        payload = {'regex': 'whisper-.*'}
+        response = self.client.post(
+            '/artifact/byRegEx',
+            headers=self.headers,
+            data=json.dumps(payload)
+        )
+        
+        self.assertEqual(response.status_code, 200)
+        data = json.loads(response.data)
+        self.assertIsInstance(data, list)
+        self.assertEqual(len(data), 2)
+
+    def test_search_by_regex_one(self):
+        """Test POST /artifact/byRegEx finds artifacts matching regex"""
+        # Create multiple models
+        urls = [
+            "https://huggingface.co/openai/whisper-tiny",
+            "https://huggingface.co/openai/whisper-base",
+            "https://huggingface.co/bert/bert-base"
+        ]
+        names = ["whisper-tiny", "whisper-base", "bert-base"]
+        
+        for i, url in enumerate(urls):
+            self.client.post(
+                '/artifact/model',
+                headers=self.headers,
+                data=json.dumps({'url': url, 'name': names[i]})
+            )
+
+        payload = {'regex': '.*whisper-base.*'}
+        response = self.client.post(
+            '/artifact/byRegEx',
+            headers=self.headers,
+            data=json.dumps(payload)
+        )
+        
+        self.assertEqual(response.status_code, 200)
+        data = json.loads(response.data)
+        self.assertIsInstance(data, list)
+        self.assertEqual(len(data), 1)
+        self.assertEqual(data[0]['name'], 'whisper-base')
+
+    def test_search_by_regex_no_matches(self):
+        """Test POST /artifact/byRegEx returns 404 when no matches"""
+        urls = [
+            "https://huggingface.co/openai/whisper-tiny",
+            "https://huggingface.co/openai/whisper-base",
+            "https://huggingface.co/bert/bert-base"
+        ]
+        names = ["whisper-tiny", "whisper-base", "bert-base"]
+        
+        for i, url in enumerate(urls):
+            self.client.post(
+                '/artifact/model',
+                headers=self.headers,
+                data=json.dumps({'url': url, 'name': names[i]})
+            )
+        payload = {'regex': 'nonexistent.*'}
+        response = self.client.post(
+            '/artifact/byRegEx',
+            headers=self.headers,
+            data=json.dumps(payload)
+        )
+        
+        self.assertEqual(response.status_code, 404)
+
+    def test_dangerous_regex_rejected(self):
+        """Test POST /artifact/byRegEx rejects dangerous regex patterns"""
+        payload = {'regex': '(a+)+$'}
+        response = self.client.post(
+            '/artifact/byRegEx',
+            headers=self.headers,
+            data=json.dumps(payload)
+        )
+        
+        self.assertEqual(response.status_code, 400)
+        data = json.loads(response.data)
+        self.assertIn('potentially dangerous', data.get('message', '').lower())
+
+    def test_missing_regex_field(self):
+        """Test POST /artifact/byRegEx fails without regex field"""
+        payload = {}
+        response = self.client.post(
+            '/artifact/byRegEx',
+            headers=self.headers,
+            data=json.dumps(payload)
+        )
+        
+        self.assertEqual(response.status_code, 400)
+        data = json.loads(response.data)
+
+
+class TestSystemHealth(TestAPIEndpoints):
+    """Test /health and /health/components endpoints"""
+
+    def setUp(self):
+        # Start parent setup first (creates test client and auth headers)
+        super().setUp()
+        # Patch boto3.client so AWS calls are mocked for these tests
+        self._boto_patcher = patch('boto3.client', side_effect=mocked_boto3_client)
+        self.mock_boto_client = self._boto_patcher.start()
+
+    def tearDown(self):
+        # Stop boto3.client patcher then run parent teardown
+        try:
+            self._boto_patcher.stop()
+        except Exception:
+            pass
+        super().tearDown()
+    
+    def test_health_check_success(self):
+        """Test GET /health returns service reachable"""
+        response = self.client.get('/health', headers=self.headers)
+        
+        self.assertEqual(response.status_code, 200)
+        data = json.loads(response.data)
+        self.assertIn('message', data)
+        self.assertEqual(data['message'], 'Service reachable.')
+        self.assertIn('timestamp', data)
+    
+    def test_health_components_success(self):
+        """Test GET /health/components returns health components with valid auth"""
+        response = self.client.get('/health/components', headers=self.headers, query_string={'windowMinutes': 60, 'includeTimeline': 'true'})
+        
+        self.assertEqual(response.status_code, 200)
+        data = json.loads(response.data)
+        self.assertIn('components', data)
+        self.assertIsInstance(data['components'], list)
+
+    def test_health_components_empty_query(self):
+        """Test GET /health/components with empty query params returns default components"""
+        response = self.client.get('/health/components', headers=self.headers)
+        
+        self.assertEqual(response.status_code, 200)
+        data = json.loads(response.data)
+        self.assertIn('components', data)
+        self.assertIsInstance(data['components'], list)
+
+    def test_health_components_invalid_query(self):
+        """Test GET /health/components with invalid query params returns 400"""
+        response = self.client.get('/health/components', headers=self.headers, query_string={'invalid_key': 'value'})
+        
+        self.assertEqual(response.status_code, 400)
+        data = json.loads(response.data)
+        self.assertIn('message', data)
+    
+    def test_health_components_authentication_failed(self):
+        """Test GET /health/components fails with invalid authentication"""
+        # call without auth headers to simulate unauthenticated request
+        response = self.client.get('/health/components')
+        self.assertEqual(response.status_code, 401)
+
+    def test_health_components_invalid_windowMinutes(self):
+        """Test GET /health/components with invalid input returns 400"""
+        response = self.client.get('/health/components', headers=self.headers, query_string={'windowMinutes': 'not-an-integer'})
+        
+        self.assertEqual(response.status_code, 400)
+        data = json.loads(response.data)
+        self.assertIn('message', data)
+    
+    def test_health_components_negative_windowMinutes(self):
+        """Test GET /health/components with negative windowMinutes returns 400"""
+        response = self.client.get('/health/components', headers=self.headers, query_string={'windowMinutes': -10})
+        
+        self.assertEqual(response.status_code, 400)
+        data = json.loads(response.data)
+        self.assertIn('message', data)
+    
+    def test_health_components_invalid_includeTimeline(self):
+        """Test GET /health/components with invalid includeTimeline returns 400"""
+        response = self.client.get('/health/components', headers=self.headers, query_string={'includeTimeline': 'not-a-boolean'})
+        
+        self.assertEqual(response.status_code, 400)
+        data = json.loads(response.data)
+        self.assertIn('message', data)
+
 
 def suite():
     """Create test suite"""
@@ -531,6 +905,9 @@ def suite():
     test_suite.addTest(unittest.makeSuite(TestArtifactUpdateEndpoint))
     test_suite.addTest(unittest.makeSuite(TestArtifactsListEndpoint))
     test_suite.addTest(unittest.makeSuite(TestEdgeCases))
+    test_suite.addTest(unittest.makeSuite(TestSearchByName))
+    test_suite.addTest(unittest.makeSuite(TestSearchByRegex))
+    test_suite.addTest(unittest.makeSuite(TestSystemHealth))
     return test_suite
 
 

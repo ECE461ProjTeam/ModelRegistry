@@ -1,3 +1,12 @@
+"""Compute a project-level NetScore from per-metric results.
+
+This module exposes a single helper, :func:`netscore`, which aggregates
+individual metric results into a weighted NetScore summary used by the
+ModelRegistry project. The function is intentionally lightweight and
+returns both a continuous weighted score and a binary pass/fail value
+based on a configurable threshold.
+"""
+
 from __future__ import annotations
 from typing import Dict, List, Any
 from .types import MetricResult
@@ -5,8 +14,8 @@ from .operationalization import Operationalization
 
 
 def netscore(
-    results: Dict[str, MetricResult],
-    ops: List[Operationalization]
+        results: Dict[str, MetricResult],
+        ops: List[Operationalization]
 ) -> Dict[str, Any]:
     comps = []
     total_w = 0.0

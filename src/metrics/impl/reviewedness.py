@@ -1,3 +1,12 @@
+"""Compute the fraction of recent code contributions that were reviewed.
+
+This metric evaluates recent PR review coverage (by default focused on
+the last ~200 merged PRs) and returns a fractional ``value`` in
+0.0..1.0 plus a binary pass if at least 50% of recent lines came from
+reviewed PRs; when no repository/PR data is available the metric returns
+``value=-1.0`` to indicate missing data.
+"""
+
 from __future__ import annotations
 from typing import Dict, Any
 from ..types import MetricResult
@@ -7,26 +16,19 @@ logger = get_logger("metrics.reviewedness")
 
 
 class ReviewednessMetric:
-    """
-    Measures the fraction of recent code that was introduced through reviewed PRs.
-    
-    Analyzes the last 200 merged PRs to evaluate current code review practices.
-    This focuses on recent development quality (typically ~1 year for active repos)
-    rather than entire project history, providing a more relevant metric for 
-    assessing ongoing maintenance and current team practices.
-    
-    Returns:
-        - value: Fraction of lines in recent PRs that came from reviewed PRs (0.0 to 1.0)
-        - binary: 1 if ≥50% of recent code was reviewed, 0 otherwise
-        - -1.0 if no GitHub repository or no PR data available
-    """
+    """Measures the fraction of recent code that was introduced through reviewed PRs.
 
+    The implementation inspects GitHub-derived statistics provided in
+    ``context['github']['pr_review_stats']`` and uses ``context['availability']``
+    to detect presence of source code. Returns detailed PR statistics in
+    the ``details`` field of the result.
+    """
     id = "reviewedness"
 
     def compute(self, context: Dict[str, Any]) -> MetricResult:
         import time
         start = time.time()
-        
+
         # logger.info(f"Context keys: {context.keys()}")
 
         code_url = context.get("code_url")
@@ -37,7 +39,7 @@ class ReviewednessMetric:
         # logger.debug(f"GitHub data present: {bool(github_data)}")
         availability = context.get("availability", {})
         has_code = availability.get("has_code", False)
-        
+
         # If no GitHub repo or no code URL, return -1
         if not github_data or not has_code:
             return MetricResult(
@@ -47,16 +49,16 @@ class ReviewednessMetric:
                 details={"reason": "No GitHub repository or no code URL"},
                 seconds=time.time() - start
             )
-        
+
         # Get PR review statistics
         pr_stats = github_data.get("pr_review_stats", {})
-        
+
         # Extract the data we need
         total_lines_added = pr_stats.get("total_lines_added", 0)
         lines_from_reviewed_prs = pr_stats.get("lines_from_reviewed_prs", 0)
         total_prs = pr_stats.get("total_prs", 0)
         reviewed_prs = pr_stats.get("reviewed_prs", 0)
-        
+
         # Calculate reviewedness fraction
         # Fraction of lines in recent PRs (up to last 200) that came from reviewed PRs
         if total_lines_added > 0:
@@ -64,7 +66,7 @@ class ReviewednessMetric:
         else:
             # No PR data available
             reviewed_fraction = 0.0
-        
+
         # Prepare detailed results
         details = {
             "total_prs_analyzed": total_prs,  # Number of recent PRs analyzed (up to 200)
