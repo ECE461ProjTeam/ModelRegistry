@@ -76,7 +76,7 @@ def fetch_github_license(github_url):
         return None, 502
 
 
-@license_check_bp.route('/artifacts/model/<int:model_id>/license-check', methods=['POST'])
+@license_check_bp.route('/artifact/model/<int:model_id>/license-check', methods=['POST'])
 @check_permissions('search')
 def license_check(model_id):
     """
