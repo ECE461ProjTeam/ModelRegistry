@@ -1,0 +1,23 @@
+import React from "react";
+import { Link } from "react-router-dom";
+import { useAuth } from "./AuthProvider.jsx";
+
+export default function Navbar() {
+  const { user, logout } = useAuth();
+
+  if (!user) return null; // Hide navbar when logged out
+
+  return (
+    <nav className="navbar">
+      <div className="nav-links">
+        <Link to="/dashboard">Dashboard</Link>
+        <Link to="/upload">Upload Artifact</Link>
+        <Link to="/health">Health</Link>
+      </div>
+
+      <button onClick={logout} style={{ background: "#ef4444" }}>
+        Logout
+      </button>
+    </nav>
+  );
+}
