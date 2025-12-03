@@ -55,8 +55,11 @@ class Artifact(db.Model):
                 logger.warning(f"Artifact {self.id} is not ingestible; skipping upload to S3.")
                 self.ingestible = False
                 return
-               
-        self.send_to_bucket()
+        
+        try:
+            self.send_to_bucket()
+        except Exception as e:
+            logger.error(f"Error sending artifact {self.id} to bucket: {e}")
                 
         
     @staticmethod
