@@ -810,6 +810,106 @@ class TestSearchByRegex(TestAPIEndpoints):
         data = json.loads(response.data)
 
 
+class TestLicenseCheckEndpoint(TestAPIEndpoints):
+    """Test /artifact/model/{id}/license-check POST endpoint"""
+
+    def test_license_check_model_not_found(self):
+        """Test POST /artifact/model/{id}/license-check returns 404 for non-existent model"""
+        response = self.client.post(
+            '/artifact/model/999999/license-check',
+            headers=self.headers,
+            data=json.dumps({'github_url': 'https://github.com/huggingface/transformers'})
+        )
+        
+        self.assertEqual(response.status_code, 404)
+        data = json.loads(response.data)
+        self.assertIn('error', data)
+
+    def test_license_check_authentication_failed(self):
+        """Test POST /artifact/model/{id}/license-check fails with missing authentication"""
+        response = self.client.post(
+            '/artifact/model/1/license-check',
+            data=json.dumps({'github_url': 'https://github.com/huggingface/transformers'})
+        )
+        
+        self.assertEqual(response.status_code, 401)
+
+    def test_license_check_invalid_github_url(self):
+        """Test POST /artifact/model/{id}/license-check returns 400 for invalid GitHub URL"""
+        response = self.client.post(
+            '/artifact/model/999999/license-check',
+            headers=self.headers,
+            data=json.dumps({'github_url': 'not-a-url'})
+        )
+        
+        self.assertEqual(response.status_code, 400)
+        data = json.loads(response.data)
+        self.assertIn('error', data)
+
+    def test_license_check_github_repo_not_found(self):
+        """Test POST /artifact/model/{id}/license-check returns 404 for non-existent GitHub repo"""
+        test_url = "https://huggingface.co/distilbert-base-uncased-finetuned-sst-2-english"
+        create_response = self.client.post(
+            '/artifact/model',
+            headers=self.headers,
+            data=json.dumps({'name': 'distilbert-sst2', 'url': test_url})
+        )
+        self.assertEqual(create_response.status_code, 201)
+        artifact_id = json.loads(create_response.data)['metadata']['id']
+        
+        response = self.client.post(
+            f'/artifact/model/{artifact_id}/license-check',
+            headers=self.headers,
+            data=json.dumps({'github_url': 'https://github.com/nonexistent-user/nonexistent-repo'})
+        )
+        
+        self.assertEqual(response.status_code, 404)
+        data = json.loads(response.data)
+        self.assertIn('error', data)
+
+    def test_license_check_repo_no_license_incompatible(self):
+        """Test POST /artifact/model/{id}/license-check returns false for repo with no license"""
+        test_url = "https://huggingface.co/distilbert-base-uncased-finetuned-sst-2-english"
+        create_response = self.client.post(
+            '/artifact/model',
+            headers=self.headers,
+            data=json.dumps({'name': 'distilbert-sst2', 'url': test_url})
+        )
+        self.assertEqual(create_response.status_code, 201)
+        artifact_id = json.loads(create_response.data)['metadata']['id']
+        
+        response = self.client.post(
+            f'/artifact/model/{artifact_id}/license-check',
+            headers=self.headers,
+            data=json.dumps({'github_url': 'https://github.com/octocat/Hello-World'})
+        )
+        
+        self.assertEqual(response.status_code, 200)
+        data = json.loads(response.data)
+        self.assertFalse(data)
+
+    def test_license_check_compatible_license_success(self):
+        """Test POST /artifact/model/{id}/license-check returns true for compatible license"""
+        test_url = "https://huggingface.co/distilbert-base-uncased-finetuned-sst-2-english"
+        create_response = self.client.post(
+            '/artifact/model',
+            headers=self.headers,
+            data=json.dumps({'name': 'distilbert-sst2', 'url': test_url})
+        )
+        self.assertEqual(create_response.status_code, 201)
+        artifact_id = json.loads(create_response.data)['metadata']['id']
+        
+        response = self.client.post(
+            f'/artifact/model/{artifact_id}/license-check',
+            headers=self.headers,
+            data=json.dumps({'github_url': 'https://github.com/apache/airflow'})
+        )
+        
+        self.assertEqual(response.status_code, 200)
+        data = json.loads(response.data)
+        self.assertTrue(data)
+
+
 class TestSystemHealth(TestAPIEndpoints):
     """Test /health and /health/components endpoints"""
 
@@ -907,6 +1007,7 @@ def suite():
     test_suite.addTest(unittest.makeSuite(TestEdgeCases))
     test_suite.addTest(unittest.makeSuite(TestSearchByName))
     test_suite.addTest(unittest.makeSuite(TestSearchByRegex))
+    test_suite.addTest(unittest.makeSuite(TestLicenseCheckEndpoint))
     test_suite.addTest(unittest.makeSuite(TestSystemHealth))
     return test_suite
 
