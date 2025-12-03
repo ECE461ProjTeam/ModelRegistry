@@ -98,16 +98,7 @@ def license_check(model_id):
         502: External license information could not be retrieved
     """
     try:
-        # # Manual authentication check to return 403 instead of 401 (idk if there is a better way)
-        # from flask_jwt_extended import get_jwt_identity, verify_jwt_in_request
-        # try:
-        #     verify_jwt_in_request()
-        #     current_user = get_jwt_identity()
-        #     if not current_user:
-        #         return jsonify({'Description': 'Authentication failed due to invalid or missing AuthenticationToken.'}), 403
-        # except Exception:
-        #     return jsonify({'Description': 'Authentication failed due to invalid or missing AuthenticationToken.'}), 403
-            
+        # Authentication is handled by decorators; see version control for previous manual approaches.
         data = request.get_json()
         github_url = (data or {}).get('github_url', '').strip()
 
