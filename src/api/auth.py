@@ -152,7 +152,6 @@ def authenticate():
 
     token_value = f"bearer {access_token}"
 
-    # return jsonify({'token': token_value}), 200
     return jsonify(token_value), 200
 
 
@@ -318,7 +317,7 @@ def get_profile():
 def get_users():
     """Admin is permitted to view list of all users"""    
     users = User.query.all()
-    user_list = [{"name": user.name, "is_admin": user.is_admin} for user in users]
-    
+    user_list = [{"name": user.name, "is_admin": user.is_admin, "permissions": user.permissions} for user in users]
+
     return jsonify({'users': user_list}), 200
     

@@ -429,7 +429,7 @@ def get_tracks():
 
 def run_api():
     app.run(
-        host='0.0.0.0',
+        host='localhost',
         port=int(os.environ.get("PORT", 5000)),
         debug=os.environ.get("DEBUG", "False") == "True"
     )
