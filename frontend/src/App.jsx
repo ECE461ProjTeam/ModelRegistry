@@ -9,6 +9,7 @@ import UploadArtifact from "./components/UploadArtifact.jsx";
 import SystemHealthDashboard from "./components/SystemHealthDashboard.jsx";
 import ArtifactsList from "./components/ArtifactsList.jsx";
 import AdminReset from "./components/AdminReset.jsx";
+import UserPage from "./components/UserPage.jsx";
 
 function PrivateRoute({ element }) {
   const { user, loading } = useAuth();
@@ -44,6 +45,7 @@ export default function App() {
           <Route path="/health" element={<PrivateRoute element={<SystemHealthDashboard />} />} />
           <Route path="/artifacts" element={<PrivateRoute element={<ArtifactsList />} />} />
           <Route path="/admin/reset" element={<PrivateRoute element={<AdminReset />} />} />
+          <Route path="/user" element={<PrivateRoute element={<UserPage />} />} />
 
         </Routes>
       </BrowserRouter>
