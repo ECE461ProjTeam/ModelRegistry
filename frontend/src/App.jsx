@@ -8,6 +8,7 @@ import Dashboard from "./components/Dashboard.jsx";
 import UploadArtifact from "./components/UploadArtifact.jsx";
 import SystemHealthDashboard from "./components/SystemHealthDashboard.jsx";
 import ArtifactsList from "./components/ArtifactsList.jsx";
+import ArtifactDetails from "./components/ArtifactDetails.jsx";   // ← NEW
 import AdminReset from "./components/AdminReset.jsx";
 
 function PrivateRoute({ element }) {
@@ -20,10 +21,7 @@ function PrivateRoute({ element }) {
       <Navigate
         to="/login"
         replace
-        state={{
-          from: location.pathname,
-          message: "Please sign in to access this page."
-        }}
+        state={{ from: location.pathname, message: "Please sign in to access this page." }}
       />
     );
   }
@@ -35,7 +33,6 @@ export default function App() {
     <AuthProvider>
       <BrowserRouter>
         <Routes>
-          
           <Route path="/" element={<HomePage />} />
           <Route path="/login" element={<LoginPage />} />
 
@@ -43,13 +40,17 @@ export default function App() {
           <Route path="/upload" element={<PrivateRoute element={<UploadArtifact />} />} />
           <Route path="/health" element={<PrivateRoute element={<SystemHealthDashboard />} />} />
           <Route path="/artifacts" element={<PrivateRoute element={<ArtifactsList />} />} />
-          <Route path="/admin/reset" element={<PrivateRoute element={<AdminReset />} />} />
 
+          {/* NEW: Details page */}
+          <Route path="/artifacts/:type/:id" element={<PrivateRoute element={<ArtifactDetails />} />} />
+
+          <Route path="/admin/reset" element={<PrivateRoute element={<AdminReset />} />} />
         </Routes>
       </BrowserRouter>
     </AuthProvider>
   );
 }
+
 
 
 
