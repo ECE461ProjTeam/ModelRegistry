@@ -13,6 +13,7 @@ export default function Navbar() {
         <Link to="/dashboard">Dashboard</Link>
         <Link to="/upload">Upload Artifact</Link>
         <Link to="/health">Health</Link>
+        <Link to="/user">Profile</Link>
       </div>
 
       <button onClick={logout} style={{ background: "#ef4444" }}>

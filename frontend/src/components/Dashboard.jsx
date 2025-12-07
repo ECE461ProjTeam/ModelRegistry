@@ -7,7 +7,7 @@ export default function Dashboard() {
     { title: "Upload Artifact", desc: "Upload models, datasets, or code.", to: "/upload", icon: "📤" },
     { title: "System Health", desc: "API uptime & diagnostics.", to: "/health", icon: "💡" },
     { title: "Browse Artifacts", desc: "View all stored artifacts.", to: "/artifacts", icon: "📦" },
-    { title: "User Profile", desc: "View and manage your account.", to: "/user", icon: "👤" }
+    { title: "Profile", desc: "View and manage your account.", to: "/user", icon: "👤" }
   ];
 
   return (

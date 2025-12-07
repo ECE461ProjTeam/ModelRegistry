@@ -24,49 +24,56 @@ export default function UserPage() {
   const token = localStorage.getItem("token");
   const allPermissions = ["search", "upload", "download"];
 
-  const fetchProfile = async () => {
-    try {
-      setLoadingProfile(true);
-      const res = await fetch(API_ENDPOINTS.PROFILE, {
-        headers: { "X-Authorization": token || "" },
-      });
-      if (!res.ok) throw new Error(`Error fetching profile: ${res.statusText}`);
-      const data = await res.json();
-      setProfile(data.profile);
-    } catch (err) {
-      console.error(err);
-      setProfile(null);
-    } finally {
-      setLoadingProfile(false);
-    }
-  };
+  // Fetch profile
+  useEffect(() => {
+    const fetchProfile = async () => {
+      try {
+        setLoadingProfile(true);
+        const res = await fetch(API_ENDPOINTS.PROFILE, {
+          headers: { "X-Authorization": token || "" },
+        });
+        if (!res.ok) throw new Error(`Error fetching profile: ${res.statusText}`);
+        const data = await res.json();
+        setProfile(data.profile);
+      } catch (err) {
+        console.error(err);
+        setProfile(null);
+      } finally {
+        setLoadingProfile(false);
+      }
+    };
+    fetchProfile();
+  }, [token]);
 
-  const fetchUsers = async () => {
-    if (!profile?.is_admin) return;
-    try {
-      setLoadingUsers(true);
-      setUsersError(null);
-      const res = await fetch(API_ENDPOINTS.USERS, {
-        headers: { "X-Authorization": token || "" },
-      });
-      if (!res.ok) throw new Error(`Error fetching users: ${res.statusText}`);
-      const data = await res.json();
-      const filtered = data.users.filter((u) => u.name !== profile.name);
-      setUsers(filtered);
-      setFilteredUsers(filtered);
-    } catch (err) {
-      console.error(err);
-      setUsersError(err.message || "Unable to fetch users");
-      setUsers([]);
-      setFilteredUsers([]);
-    } finally {
-      setLoadingUsers(false);
-    }
-  };
+  // Fetch users (admin only)
+  useEffect(() => {
+    const fetchUsers = async () => {
+      if (!profile?.is_admin) return;
+      try {
+        setLoadingUsers(true);
+        setUsersError(null);
+        const res = await fetch(API_ENDPOINTS.USERS, {
+          headers: { "X-Authorization": token || "" },
+        });
+        if (!res.ok) throw new Error(`Error fetching users: ${res.statusText}`);
+        const data = await res.json();
+        const filtered = data.users.filter((u) => u.name !== profile.name);
+        setUsers(filtered);
+        setFilteredUsers(filtered);
+      } catch (err) {
+        console.error(err);
+        setUsersError(err.message || "Unable to fetch users");
+        setUsers([]);
+        setFilteredUsers([]);
+      } finally {
+        setLoadingUsers(false);
+      }
+    };
 
-  useEffect(() => { fetchProfile(); }, []);
-  useEffect(() => { fetchUsers(); }, [profile]);
+    fetchUsers();
+  }, [profile, token]);
 
+  // Delete user
   const handleDelete = async (username) => {
     const confirmed = window.confirm("Are you sure?");
     if (!confirmed) return;
@@ -83,13 +90,23 @@ export default function UserPage() {
         window.location.href = "/";
         return;
       }
-      fetchUsers();
+      // refetch users
+      if (profile?.is_admin) {
+        const res = await fetch(API_ENDPOINTS.USERS, {
+          headers: { "X-Authorization": token || "" },
+        });
+        const data = await res.json();
+        const filtered = data.users.filter((u) => u.name !== profile.name);
+        setUsers(filtered);
+        setFilteredUsers(filtered);
+      }
     } catch (err) {
       console.error(err);
       alert(err.message || "Delete failed");
     }
   };
 
+  // Search users
   const handleSearch = (query) => {
     setSearchQuery(query);
     if (!query) setFilteredUsers(users);
@@ -99,6 +116,7 @@ export default function UserPage() {
     }
   };
 
+  // Toggle permissions for new user
   const togglePermission = (perm) => {
     if (newUser.is_admin) return;
     setNewUser((prev) => {
@@ -117,6 +135,7 @@ export default function UserPage() {
     }));
   };
 
+  // Register new user
   const handleRegisterSubmit = async () => {
     if (!newUser.name || !newUser.password) {
       alert("Username and password are required");
@@ -141,7 +160,17 @@ export default function UserPage() {
       alert(`User ${newUser.name} registered successfully`);
       setNewUser({ name: "", is_admin: false, permissions: [], password: "" });
       setShowRegister(false);
-      fetchUsers();
+
+      // refetch users
+      if (profile?.is_admin) {
+        const res = await fetch(API_ENDPOINTS.USERS, {
+          headers: { "X-Authorization": token || "" },
+        });
+        const data = await res.json();
+        const filtered = data.users.filter((u) => u.name !== profile.name);
+        setUsers(filtered);
+        setFilteredUsers(filtered);
+      }
     } catch (err) {
       console.error(err);
       alert(err.message || "Register failed");
@@ -254,7 +283,7 @@ export default function UserPage() {
                         borderRadius: "4px",
                         cursor: "pointer",
                         fontSize: "0.65rem",
-                        alignSelf: "flex-start", // aligns button to left below info
+                        alignSelf: "flex-start",
                       }}
                     >
                       Delete
