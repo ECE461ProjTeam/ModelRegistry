@@ -451,7 +451,7 @@ def fetch_application_logs(window: datetime) -> list:
             "display_name": f"Application Logs",
             "status": "OK",
             "observed_at": datetime.now(timezone.utc).isoformat(),
-            "timeline": cleaned_events
+            "logs": cleaned_events
         }
         components.append(app_logs)
     except Exception as e:

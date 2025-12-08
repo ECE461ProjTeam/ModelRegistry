@@ -5,6 +5,7 @@ const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || 'http://localhost:5001
 // Endpoints mirror the Flask routes defined in src/api/app.py
 const API_ENDPOINTS = {
     HEALTH: `${API_BASE_URL}/health`,
+    HEALTH_COMPONENTS: `${API_BASE_URL}/health/components`,
     AUTHENTICATE: `${API_BASE_URL}/authenticate`,
     REGISTER: `${API_BASE_URL}/register`,
     PROFILE: `${API_BASE_URL}/profile`,
