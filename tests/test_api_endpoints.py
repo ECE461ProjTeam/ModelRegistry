@@ -914,7 +914,7 @@ class TestArtifactLineageEndpoint(TestAPIEndpoints):
     def _populate_lineage_data(self, artifact_id, model_id, base_model_hints=None, tags=None):
         """Helper to populate lineage data for an artifact (since rate() is mocked)"""
         with self.app.app_context():
-            artifact = Artifact.query.get(artifact_id)
+            artifact = Artifact.query.filter_by(id=artifact_id).first()
             if artifact:
                 artifact.ndjson = artifact.ndjson or {}
                 artifact.ndjson['lineage'] = {
