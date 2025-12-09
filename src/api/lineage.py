@@ -325,10 +325,17 @@ def find_child_matches(target_model_id: str, all_artifacts: List[Any]) -> List[A
         # Fallback: substring matching (e.g., "roberta-base" in "twitter-roberta-base-sentiment")
         else:
             for hint in normalized_hints:
-                if normalized_target_id in hint:
+                # Use regex to match the target as a whole word or separated by delimiters
+                # Delimiters: start/end, -, _, /, or word boundary
+                pattern = r'(^|[-_/]){}($|[-_/])'.format(re.escape(normalized_target_id))
+                if re.search(pattern, hint):
                     children.append(artifact)
-                    logger.debug(f"Found child match: {artifact_model_id} (id={artifact.id}) via substring in hint '{hint}'")
-                    break
+                    logger.debug(f"Found child match: {artifact_model_id} (id={artifact.id}) via regex match in hint '{hint}'")
+                
+                # if normalized_target_id in hint:
+                #     children.append(artifact)
+                #     logger.debug(f"Found child match: {artifact_model_id} (id={artifact.id}) via substring in hint '{hint}'")
+                #     break
     
     return children
 

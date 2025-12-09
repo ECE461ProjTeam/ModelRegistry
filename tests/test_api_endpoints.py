@@ -1162,7 +1162,7 @@ class TestArtifactLineageEndpoint(TestAPIEndpoints):
         )
         self._populate_lineage_data(
             quantized_id,
-            'ManavDhayeCoder/sentiment-bert',
+            'ggml-org/bert-base-uncased',
             base_model_hints=['google-bert/bert-base-uncased'],
             tags=['base_model:quantized:google-bert/bert-base-uncased']
         )
@@ -1184,6 +1184,8 @@ class TestArtifactLineageEndpoint(TestAPIEndpoints):
         self.assertEqual(relationships[finetune_id], 'finetune')
         # Verify adapter relationship
         self.assertEqual(relationships[adapter_id], 'adapter')
+        # Verify quantized relationship
+        self.assertEqual(relationships[quantized_id], 'quantized')
 
     def test_lineage_response_format(self):
         """Test that lineage response has correct structure and field ordering"""
