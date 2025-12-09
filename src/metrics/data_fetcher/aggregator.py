@@ -9,6 +9,7 @@ from typing import Any, Dict
 # by this aggregator.
 from .. import data_fetcher as df
 from src.logger import get_logger
+from src.api.lineage import extract_lineage_from_url, extract_lineage_from_hf_metadata, merge_lineage_data
 
 logger = get_logger("data_fetcher.aggregator")
 
@@ -89,6 +90,12 @@ def fetch_comprehensive_metrics_data(
                 data["requirements_total"] = perf_analysis["requirements_total"]
                 data["requirements_score"] = perf_analysis["requirements_score"]
                 data["performance_details"] = perf_analysis["details"]
+
+                # Extract lineage information from HF data and URL
+                logger.info("Extracting lineage information from HuggingFace data")
+                url_lineage = extract_lineage_from_url(model_url)
+                hf_lineage = extract_lineage_from_hf_metadata(hf_m)
+                data["lineage"] = merge_lineage_data(url_lineage, hf_lineage)
 
         # HF dataset
         if dataset_url and "huggingface.co/datasets" in dataset_url:

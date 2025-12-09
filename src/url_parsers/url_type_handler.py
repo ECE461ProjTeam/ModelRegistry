@@ -255,6 +255,7 @@ def handle_url(models: Dict[str, List[Optional[str]]]) -> Dict[str, dict]:
             "reproducibility_latency": reproducibility_seconds,
             "tree_score": get_metric("tree_score"),
             "tree_score_latency": get_latency("tree_score"),
+            "lineage": context.get("lineage"),  # Pass lineage from comprehensive data
         }
 
         ndjsons[key] = default_ndjson(

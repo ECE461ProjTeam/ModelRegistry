@@ -31,7 +31,8 @@ def default_ndjson(
         reproducibility=None,
         reproducibility_latency=None,
         tree_score=None,
-        tree_score_latency=None):
+        tree_score_latency=None,
+        lineage=None):
 
     if category is not None:
         hf_match = re.match(r"https?://huggingface\.co/([^/]+)/([^/]+)", model)
@@ -84,6 +85,10 @@ def default_ndjson(
         "tree_score": score(tree_score),
         "tree_score_latency": latency(tree_score_latency)
     }
+    
+    # Add lineage data if provided
+    if lineage is not None:
+        ndjson["lineage"] = lineage
 
     weights = {
         "size": 0.05,
