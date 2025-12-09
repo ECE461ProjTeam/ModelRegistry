@@ -2,20 +2,44 @@ import React, { useEffect, useState } from "react";
 import { useParams } from "react-router-dom";
 import Navbar from "../components/Navbar.jsx";
 import API_ENDPOINTS from "../config/api";
+import axios from "axios";
 import LoadingSpinner from "../components/LoadingSpinner.jsx";
 import SuccessBanner from "../components/SuccessBanner.jsx";
 import ErrorBanner from "../components/ErrorBanner.jsx";
-import axios from "axios";
 
 export default function ArtifactDetails() {
   const { type, id } = useParams();
 
   const [metadata, setMetadata] = useState(null);
+  const [dataBlock, setDataBlock] = useState(null);
   const [error, setError] = useState("");
   const [success, setSuccess] = useState("");
   const [loading, setLoading] = useState(false);
 
   const token = localStorage.getItem("token");
+
+  // Pretty print any JSON object into a readable list
+function renderJsonObject(obj) {
+  if (!obj || typeof obj !== "object") return String(obj);
+
+  return (
+    <div style={{
+      background: "#111",
+      padding: "1rem",
+      borderRadius: "8px",
+      marginTop: "1rem",
+      whiteSpace: "pre-wrap",
+      fontFamily: "monospace",
+      color: "#0f0"
+    }}>
+      {Object.entries(obj).map(([key, value]) => (
+        <div key={key}>
+          <strong>{key}:</strong> {JSON.stringify(value, null, 2)}
+        </div>
+      ))}
+    </div>
+  );
+}
 
 
   const fetchArtifact = async () => {
@@ -25,7 +49,10 @@ export default function ArtifactDetails() {
         { headers: { "X-Authorization": token } }
       );
 
-      setMetadata(res.data);
+      // backend returns { metadata: {...}, data: {...} }
+      setMetadata(res.data.metadata);
+      setDataBlock(res.data.data);
+
     } catch (err) {
       setError("Failed to load artifact details.");
       setMetadata(null);
@@ -34,9 +61,14 @@ export default function ArtifactDetails() {
 
   useEffect(() => {
     fetchArtifact();
-  }, [type, id]);
+  }, []);
 
-  const run = async (action, fn) => {
+
+  // --------------------------
+  // ACTION HANDLERS (NO CHANGE)
+  // --------------------------
+
+  const run = async (fn) => {
     setLoading(true);
     setError("");
     setSuccess("");
@@ -56,38 +88,40 @@ export default function ArtifactDetails() {
   };
 
   const handleDownload = () =>
-    run("download", async () => {
-      const res = await axios.get(
-        API_ENDPOINTS.ARTIFACT_BY_TYPE_ID(type, id),
-        { headers: { "X-Authorization": token } }
-      );
+    run(async () => {
+      if (!dataBlock?.url)
+        throw new Error("Backend did not provide a download URL.");
 
-      // backend does not store files, so we show metadata
-      return "Metadata retrieved (download placeholder).";
+      // trigger real download
+      window.location.href = dataBlock.url;
+
+      return "Downloading...";
     });
 
   const handleCost = () =>
-    run("cost", async () => {
+    run(async () => {
       const res = await axios.get(API_ENDPOINTS.ARTIFACT_COST(type, id), {
         headers: { "X-Authorization": token },
       });
 
-      return `Cost: ${JSON.stringify(res.data)}`;
+      return res.data;  // return the pure object for pretty printing
+
     });
 
   const handleRate = () =>
-    run("rate", async () => {
+    run(async () => {
       if (type !== "model") throw new Error("Only models can be rated.");
 
       const res = await axios.get(API_ENDPOINTS.ARTIFACT_RATE(id), {
         headers: { "X-Authorization": token },
       });
 
-      return `Rating: ${JSON.stringify(res.data)}`;
+      return res.data;
+
     });
 
   const handleLicense = () =>
-    run("license", async () => {
+    run(async () => {
       const res = await axios.post(
         API_ENDPOINTS.ARTIFACT_LICENSE_CHECK(id),
         {},
@@ -98,7 +132,7 @@ export default function ArtifactDetails() {
     });
 
   const handleAudit = () =>
-    run("audit", async () => {
+    run(async () => {
       const res = await axios.get(
         API_ENDPOINTS.ARTIFACT_AUDIT(type, id),
         { headers: { "X-Authorization": token } }
@@ -108,7 +142,7 @@ export default function ArtifactDetails() {
     });
 
   const handleLineage = () =>
-    run("lineage", async () => {
+    run(async () => {
       const res = await axios.get(API_ENDPOINTS.ARTIFACT_LINEAGE(id), {
         headers: { "X-Authorization": token },
       });
@@ -122,49 +156,52 @@ export default function ArtifactDetails() {
       <div className="container">
         <h1>Artifact Details</h1>
 
-        <div className="card">
-          {!metadata ? (
-            <LoadingSpinner />
-          ) : (
-            <>
-              <p><strong>Name:</strong> {metadata.name || "N/A"}</p>
-              <p><strong>ID:</strong> {metadata.id || id}</p>
-              <p><strong>Type:</strong> {metadata.type || type}</p>
-              <p><strong>Version:</strong> {metadata.version || "N/A"}</p>
+        {!metadata ? (
+          <LoadingSpinner />
+        ) : (
+          <div className="card">
+            <p><strong>Name:</strong> {metadata.name}</p>
+            <p><strong>ID:</strong> {metadata.id}</p>
+            <p><strong>Type:</strong> {metadata.type}</p>
 
-              {/* Buttons */}
-              <button onClick={handleDownload} disabled={loading}>
-                Download
-              </button>
+            <button onClick={handleDownload} disabled={loading}>
+              Download
+            </button>
 
-              <button onClick={handleCost} disabled={loading} style={{ marginTop: "1rem" }}>
-                Get Cost
-              </button>
+            <button onClick={handleCost} disabled={loading} style={{ marginTop: "1rem" }}>
+              Get Cost
+            </button>
 
-              <button onClick={handleRate} disabled={loading} style={{ marginTop: "1rem" }}>
-                Rate
-              </button>
+            <button onClick={handleRate} disabled={loading} style={{ marginTop: "1rem" }}>
+              Rate
+            </button>
 
-              <button onClick={handleLicense} disabled={loading} style={{ marginTop: "1rem" }}>
-                Run License Check
-              </button>
+            <button onClick={handleLicense} disabled={loading} style={{ marginTop: "1rem" }}>
+              Run License Check
+            </button>
 
-              <button onClick={handleAudit} disabled={loading} style={{ marginTop: "1rem" }}>
-                View Audit
-              </button>
+            <button onClick={handleAudit} disabled={loading} style={{ marginTop: "1rem" }}>
+              View Audit
+            </button>
 
-              <button onClick={handleLineage} disabled={loading} style={{ marginTop: "1rem" }}>
-                View Lineage
-              </button>
+            <button onClick={handleLineage} disabled={loading} style={{ marginTop: "1rem" }}>
+              View Lineage
+            </button>
 
-              {/* Status Messages */}
-              <SuccessBanner message={success} />
-              <ErrorBanner message={error} />
-            </>
-          )}
-        </div>
+            {success && (
+  <div style={{ marginTop: "1rem" }}>
+    <SuccessBanner message={typeof success === "string" ? success : ""} />
+    {/* If success is JSON, show pretty box */}
+    {typeof success === "object" && renderJsonObject(success)}
+  </div>
+)}
+
+            <ErrorBanner message={error} />
+          </div>
+        )}
       </div>
     </>
   );
 }
+
 
