@@ -30,9 +30,13 @@ def get_huggingface_model_data(model_url: str) -> Dict[str, Any]:
             "model_id": getattr(info, "modelId", model_id),
             "sha": getattr(info, "sha", None),
             "card_data": getattr(info, "cardData", {}) or {},
+            "config": getattr(info, "config", {}) or {},
         }
         if data["card_data"]:
             data["license"] = data["card_data"].get("license", "")
+
+        # logger.debug(f"Model info: {info}")
+
 
         # total size (best-effort)
         total_size = 0

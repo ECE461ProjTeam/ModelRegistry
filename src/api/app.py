@@ -17,6 +17,7 @@ from .health import health_bp
 from .license_check import license_check_bp
 from .config import Config, TestConfig
 from .extensions import init_extensions, db
+from .lineage import build_lineage_graph
 # from datetime import datetime, timezone
 from dotenv import load_dotenv
 from .s3 import clear_s3_bucket
@@ -35,6 +36,10 @@ plannedTracks = ["Access control track"]
 # model_registry = {}
 
 app = Flask(__name__)
+
+# Disable JSON key sorting to preserve dict insertion order
+app.json.sort_keys = False
+
 
 if os.environ.get("DEBUG", "False") == "True":
     app.config.from_object(TestConfig)
@@ -392,20 +397,46 @@ def ArtifactAuditGet(artifact_type, id):
 @app.route('/artifact/model/<id>/lineage', methods=['GET'])
 @check_permissions("search")
 def ArtifactLineageGet(id):
-    """No message provided."""
+    """Retrieve the lineage graph for a model artifact.
+    
+    Returns a graph with nodes (models) and edges (parent-child relationships)
+    based on stored lineage metadata. Only includes ingested models.
+    """
     if id is None:
         return jsonify({'error': 'There is missing field(s) in the artifact_id or it is formed improperly, or is invalid.'}), 400
     
     if not id.isdigit():
         return jsonify({'error': 'Artifact does not exist.'}), 404
     
-    return jsonify({'message': 'Not implemented'}), 501
-
-@app.route('/artifact/byRegEx', methods=['POST'])
-@check_permissions("search")
-def ArtifactByRegExGet():
-    """No message provided."""
-    return jsonify({'message': 'Not implemented'}), 501
+    try:
+        # Get the target artifact
+        target_artifact = Artifact.query.filter_by(id=int(id), type='model').first()
+        
+        if not target_artifact:
+            return jsonify({'error': 'Artifact does not exist.'}), 404
+        
+        # Check if lineage data exists
+        if not target_artifact.ndjson or 'lineage' not in target_artifact.ndjson:
+            logger.warning(f"Artifact {id} has no lineage metadata")
+            return jsonify({
+                'error': 'The lineage graph cannot be computed because the artifact metadata is missing or malformed.'}), 400
+        
+        # Get all other model artifacts from database
+        all_artifacts = Artifact.query.filter(
+            Artifact.type == 'model',
+            Artifact.id != int(id)
+        ).all()
+        
+        # Build the lineage graph
+        lineage_graph = build_lineage_graph(target_artifact, all_artifacts)
+        
+        return jsonify(lineage_graph), 200
+        
+    except Exception as e:
+        logger.error(f"Error building lineage graph for artifact {id}: {e}")
+        return jsonify({
+            'error': 'The lineage graph cannot be computed because the artifact metadata is missing or malformed.'
+        }), 400
 
 
 @app.route('/tracks', methods=['GET'])
