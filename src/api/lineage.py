@@ -352,7 +352,7 @@ def build_lineage_graph(target_artifact: Any, all_artifacts: List[Any]) -> Dict[
         all_artifacts: List of all model artifacts from database (excluding target)
         
     Returns:
-        Dictionary with 'description', 'nodes', and 'edges' keys matching API spec
+        Dictionary with 'nodes' and 'edges' keys matching API spec
     """
     # Extract target's lineage data
     target_lineage = target_artifact.ndjson.get("lineage", {}) if target_artifact.ndjson else {}
