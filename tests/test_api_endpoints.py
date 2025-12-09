@@ -908,6 +908,331 @@ class TestLicenseCheckEndpoint(TestAPIEndpoints):
         self.assertTrue(data)
 
 
+class TestArtifactLineageEndpoint(TestAPIEndpoints):
+    """Test /artifact/model/{id}/lineage GET endpoint"""
+    
+    def _populate_lineage_data(self, artifact_id, model_id, base_model_hints=None, tags=None):
+        """Helper to populate lineage data for an artifact (since rate() is mocked)"""
+        with self.app.app_context():
+            artifact = Artifact.query.get(artifact_id)
+            if artifact:
+                artifact.ndjson = artifact.ndjson or {}
+                artifact.ndjson['lineage'] = {
+                    'model_id': model_id,
+                    'base_model': None,
+                    'base_model_hints': base_model_hints or [],
+                    'tags': tags or [],
+                    'model_type': 'bert'
+                }
+                db.session.commit()
+
+    def test_lineage_not_found(self):
+        """Test GET /artifact/model/{id}/lineage returns 404 for non-existent model"""
+        response = self.client.get(
+            '/artifact/model/999999/lineage',
+            headers=self.headers
+        )
+        
+        self.assertEqual(response.status_code, 404)
+        data = json.loads(response.data)
+        self.assertIn('error', data)
+
+    def test_lineage_authentication_failed(self):
+        """Test GET /artifact/model/{id}/lineage fails without authentication"""
+        response = self.client.get('/artifact/model/1/lineage')
+        
+        self.assertEqual(response.status_code, 401)
+
+    def test_lineage_invalid_id_format(self):
+        """Test GET /artifact/model/{id}/lineage returns 404 for malformed ID"""
+        response = self.client.get(
+            '/artifact/model/invalid/lineage',
+            headers=self.headers
+        )
+        
+        self.assertEqual(response.status_code, 404)
+
+    def test_lineage_standalone_model(self):
+        """Test lineage for a model with no parents or children"""
+        # Create a standalone model
+        test_url = "https://huggingface.co/prajjwal1/bert-tiny"
+        create_response = self.client.post(
+            '/artifact/model',
+            headers=self.headers,
+            data=json.dumps({'url': test_url})
+        )
+        self.assertEqual(create_response.status_code, 201)
+        artifact_id = json.loads(create_response.data)['metadata']['id']
+        
+        # Populate lineage data (no parents)
+        self._populate_lineage_data(artifact_id, 'prajjwal1/bert-tiny')
+        
+        # Query lineage
+        response = self.client.get(
+            f'/artifact/model/{artifact_id}/lineage',
+            headers=self.headers
+        )
+        
+        self.assertEqual(response.status_code, 200)
+        data = json.loads(response.data)
+        self.assertIn('nodes', data)
+        self.assertIn('edges', data)
+        self.assertEqual(len(data['nodes']), 1)
+        self.assertEqual(len(data['edges']), 0)
+        self.assertEqual(data['nodes'][0]['artifact_id'], artifact_id)
+
+    def test_lineage_parent_child_relationship(self):
+        """Test lineage with parent-child (base model and finetuned model)"""
+        # Create base model
+        base_url = "https://huggingface.co/google-bert/bert-base-uncased"
+        base_response = self.client.post(
+            '/artifact/model',
+            headers=self.headers,
+            data=json.dumps({'url': base_url})
+        )
+        self.assertEqual(base_response.status_code, 201)
+        base_id = json.loads(base_response.data)['metadata']['id']
+        
+        # Create finetuned model
+        child_url = "https://huggingface.co/ManavDhayeCoder/sentiment-bert"
+        child_response = self.client.post(
+            '/artifact/model',
+            headers=self.headers,
+            data=json.dumps({'url': child_url})
+        )
+        self.assertEqual(child_response.status_code, 201)
+        child_id = json.loads(child_response.data)['metadata']['id']
+        
+        # Populate lineage data
+        self._populate_lineage_data(base_id, 'google-bert/bert-base-uncased')
+        self._populate_lineage_data(
+            child_id, 
+            'ManavDhayeCoder/sentiment-bert',
+            base_model_hints=['google-bert/bert-base-uncased'],
+            tags=['base_model:google-bert/bert-base-uncased', 'base_model:finetune:google-bert/bert-base-uncased']
+        )
+        
+        # Query lineage for child (should show parent)
+        response = self.client.get(
+            f'/artifact/model/{child_id}/lineage',
+            headers=self.headers
+        )
+        
+        self.assertEqual(response.status_code, 200)
+        data = json.loads(response.data)
+        self.assertIn('nodes', data)
+        self.assertIn('edges', data)
+        self.assertEqual(len(data['nodes']), 2)
+        self.assertEqual(len(data['edges']), 1)
+        
+        # Verify edge direction and relationship
+        edge = data['edges'][0]
+        self.assertEqual(edge['from_node_artifact_id'], base_id)
+        self.assertEqual(edge['to_node_artifact_id'], child_id)
+        self.assertEqual(edge['relationship'], 'finetune')
+        
+        # Query lineage for base (should show child)
+        response = self.client.get(
+            f'/artifact/model/{base_id}/lineage',
+            headers=self.headers
+        )
+        
+        self.assertEqual(response.status_code, 200)
+        data = json.loads(response.data)
+        self.assertEqual(len(data['nodes']), 2)
+        self.assertEqual(len(data['edges']), 1)
+        
+        # Edge should be same: base -> child
+        edge = data['edges'][0]
+        self.assertEqual(edge['from_node_artifact_id'], base_id)
+        self.assertEqual(edge['to_node_artifact_id'], child_id)
+
+    def test_lineage_multiple_children(self):
+        """Test lineage with one parent and multiple children"""
+        # Create base model
+        base_url = "https://huggingface.co/google-bert/bert-base-uncased"
+        base_response = self.client.post(
+            '/artifact/model',
+            headers=self.headers,
+            data=json.dumps({'url': base_url})
+        )
+        self.assertEqual(base_response.status_code, 201)
+        base_id = json.loads(base_response.data)['metadata']['id']
+        
+        # Create multiple derived models
+        derived_models = [
+            ("https://huggingface.co/ManavDhayeCoder/sentiment-bert", "ManavDhayeCoder/sentiment-bert"),
+            ("https://huggingface.co/kwwww/bert-base-uncased-test_4_1039", "kwwww/bert-base-uncased-test_4_1039"),
+            ("https://huggingface.co/ggml-org/bert-base-uncased", "ggml-org/bert-base-uncased")
+        ]
+        derived_ids = []
+        
+        # Populate base model lineage
+        self._populate_lineage_data(base_id, 'google-bert/bert-base-uncased')
+        
+        for url, model_id in derived_models:
+            response = self.client.post(
+                '/artifact/model',
+                headers=self.headers,
+                data=json.dumps({'url': url})
+            )
+            self.assertEqual(response.status_code, 201)
+            artifact_id = json.loads(response.data)['metadata']['id']
+            derived_ids.append(artifact_id)
+            
+            # Populate lineage data for derived model
+            self._populate_lineage_data(
+                artifact_id,
+                model_id,
+                base_model_hints=['google-bert/bert-base-uncased'],
+                tags=['base_model:google-bert/bert-base-uncased']
+            )
+        
+        # Query lineage for base model
+        response = self.client.get(
+            f'/artifact/model/{base_id}/lineage',
+            headers=self.headers
+        )
+        
+        self.assertEqual(response.status_code, 200)
+        data = json.loads(response.data)
+        
+        # Should have base + 3 children = 4 nodes
+        self.assertEqual(len(data['nodes']), 4)
+        # Should have 3 edges (base -> each child)
+        self.assertEqual(len(data['edges']), 3)
+        
+        # Verify all edges point from base to children
+        for edge in data['edges']:
+            self.assertEqual(edge['from_node_artifact_id'], base_id)
+            self.assertIn(edge['to_node_artifact_id'], derived_ids)
+
+    def test_lineage_relationship_types(self):
+        """Test that different relationship types are correctly identified"""
+        # Create base model
+        base_url = "https://huggingface.co/google-bert/bert-base-uncased"
+        base_response = self.client.post(
+            '/artifact/model',
+            headers=self.headers,
+            data=json.dumps({'url': base_url})
+        )
+        base_id = json.loads(base_response.data)['metadata']['id']
+        
+        # Create finetuned model
+        finetune_url = "https://huggingface.co/ManavDhayeCoder/sentiment-bert"
+        finetune_response = self.client.post(
+            '/artifact/model',
+            headers=self.headers,
+            data=json.dumps({'url': finetune_url})
+        )
+        finetune_id = json.loads(finetune_response.data)['metadata']['id']
+        
+        # Create adapter model
+        adapter_url = "https://huggingface.co/kwwww/bert-base-uncased-test_4_1039"
+        adapter_response = self.client.post(
+            '/artifact/model',
+            headers=self.headers,
+            data=json.dumps({'url': adapter_url})
+        )
+        adapter_id = json.loads(adapter_response.data)['metadata']['id']
+
+
+        # Create quanitzed model
+        quantized_url = "https://huggingface.co/ManavDhayeCoder/sentiment-bert"
+        quantized_response = self.client.post(
+            '/artifact/model',
+            headers=self.headers,
+            data=json.dumps({'url': quantized_url})
+        )
+        quantized_id = json.loads(quantized_response.data)['metadata']['id']
+        
+        # Populate lineage data
+        self._populate_lineage_data(base_id, 'google-bert/bert-base-uncased')
+        self._populate_lineage_data(
+            finetune_id,
+            'ManavDhayeCoder/sentiment-bert',
+            base_model_hints=['google-bert/bert-base-uncased'],
+            tags=['base_model:finetune:google-bert/bert-base-uncased']
+        )
+        self._populate_lineage_data(
+            adapter_id,
+            'kwwww/bert-base-uncased-test_4_1039',
+            base_model_hints=['google-bert/bert-base-uncased'],
+            tags=['base_model:adapter:google-bert/bert-base-uncased']
+        )
+        self._populate_lineage_data(
+            quantized_id,
+            'ManavDhayeCoder/sentiment-bert',
+            base_model_hints=['google-bert/bert-base-uncased'],
+            tags=['base_model:quantized:google-bert/bert-base-uncased']
+        )
+        
+        # Query lineage for base model
+        response = self.client.get(
+            f'/artifact/model/{base_id}/lineage',
+            headers=self.headers
+        )
+        
+        data = json.loads(response.data)
+        
+        # Find edges and verify relationship types
+        relationships = {}
+        for edge in data['edges']:
+            relationships[edge['to_node_artifact_id']] = edge['relationship']
+        
+        # Verify finetune relationship
+        self.assertEqual(relationships[finetune_id], 'finetune')
+        # Verify adapter relationship
+        self.assertEqual(relationships[adapter_id], 'adapter')
+
+    def test_lineage_response_format(self):
+        """Test that lineage response has correct structure and field ordering"""
+        # Create a model
+        test_url = "https://huggingface.co/google-bert/bert-base-uncased"
+        create_response = self.client.post(
+            '/artifact/model',
+            headers=self.headers,
+            data=json.dumps({'url': test_url})
+        )
+        artifact_id = json.loads(create_response.data)['metadata']['id']
+        
+        # Populate lineage data
+        self._populate_lineage_data(artifact_id, 'google-bert/bert-base-uncased')
+        
+        # Query lineage
+        response = self.client.get(
+            f'/artifact/model/{artifact_id}/lineage',
+            headers=self.headers
+        )
+        
+        self.assertEqual(response.status_code, 200)
+        data = json.loads(response.data)
+        
+        # Verify top-level keys
+        self.assertIn('nodes', data)
+        self.assertIn('edges', data)
+        
+        # Verify nodes structure
+        for node in data['nodes']:
+            self.assertIn('artifact_id', node)
+            self.assertIn('name', node)
+            self.assertIn('source', node)
+            # Verify field types
+            self.assertIsInstance(node['artifact_id'], int)
+            self.assertIsInstance(node['name'], str)
+            self.assertIsInstance(node['source'], str)
+        
+        # Verify edges structure (if present)
+        for edge in data['edges']:
+            self.assertIn('from_node_artifact_id', edge)
+            self.assertIn('to_node_artifact_id', edge)
+            self.assertIn('relationship', edge)
+            # Verify field types
+            self.assertIsInstance(edge['from_node_artifact_id'], int)
+            self.assertIsInstance(edge['to_node_artifact_id'], int)
+            self.assertIsInstance(edge['relationship'], str)
+
+
 class TestSystemHealth(TestAPIEndpoints):
     """Test /health and /health/components endpoints"""
 

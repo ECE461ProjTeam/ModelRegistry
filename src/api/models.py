@@ -89,7 +89,8 @@ class Artifact(db.Model):
             return False
               
         for key in self.ndjson:
-            if not key.endswith("_latency") and key != "name" and key != "category":
+            # Skip non-metric fields
+            if not key.endswith("_latency") and key not in ["name", "category", "lineage"]:
                 if isinstance(self.ndjson[key], dict):
                     for subkey in self.ndjson[key]:
                         if self.ndjson[key][subkey] < 0.5:

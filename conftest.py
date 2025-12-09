@@ -6,6 +6,10 @@ Configures test discovery, coverage reporting, and test execution.
 import pytest
 import sys
 import os
+from dotenv import load_dotenv
+
+# Load environment variables from .env file
+load_dotenv()
 
 # Ensure src is in path for all tests
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), 'src'))

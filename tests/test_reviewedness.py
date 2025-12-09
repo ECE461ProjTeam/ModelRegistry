@@ -330,7 +330,7 @@ class TestReviewednessE2E:
         - Net score integration works
         """
         # Using pallets/click - small, well-maintained, fast to analyze
-        urls = {0: ["https://github.com/pallets/click"]}
+        urls = {0: ["https://github.com/pallets/click", None, None]}
         results = handle_url(urls)
         result = results[0]
         
@@ -361,7 +361,7 @@ class TestReviewednessE2E:
     def test_minimal_pr_repo(self):
         """Test with repo that has very few PRs (edge case)."""
         # octocat/Hello-World has minimal PR activity
-        urls = {0: ["https://github.com/octocat/Hello-World"]}
+        urls = {0: ["https://github.com/octocat/Hello-World", None, None]}
         results = handle_url(urls)
         result = results[0]
         
@@ -370,7 +370,7 @@ class TestReviewednessE2E:
     
     def test_huggingface_with_github_link(self):
         """Test HuggingFace model that links to GitHub repo."""
-        urls = {0: ["https://huggingface.co/microsoft/phi-2"]}
+        urls = {0: [None, None, "https://huggingface.co/microsoft/phi-2"]}
         results = handle_url(urls)
         result = results[0]
         
