@@ -14,6 +14,7 @@ from src.logger import get_logger
 from .models import User, TokenUsage, Artifact
 from .auth import auth_bp, create_default_admin, check_permissions
 from .health import health_bp
+from .license_check import license_check_bp
 from .config import Config, TestConfig
 from .extensions import init_extensions, db
 # from datetime import datetime, timezone
@@ -35,9 +36,6 @@ plannedTracks = ["Access control track"]
 
 app = Flask(__name__)
 
-
-
-
 if os.environ.get("DEBUG", "False") == "True":
     app.config.from_object(TestConfig)
     # Record which config we loaded so prints and tests can verify it
@@ -47,6 +45,11 @@ else:
     app.config['ACTIVE_CONFIG'] = Config.__name__
 
 logger.debug(f"App running with config: {app.config.get('ACTIVE_CONFIG')}")
+
+app.register_blueprint(auth_bp)
+app.register_blueprint(regex_bp)
+app.register_blueprint(license_check_bp)
+app.register_blueprint(health_bp)
 
 init_extensions(app)
 
@@ -65,18 +68,12 @@ with app.app_context():
             return reg.search(string) is not None
         conn.create_function("REGEXP", 2, regexp)
 
-app.register_blueprint(auth_bp)
-app.register_blueprint(regex_bp)
-
-app.register_blueprint(health_bp)
-
 @app.before_request
 @jwt_required(optional=True)
 def log_request():
     logger.info(f"Received {request.method} request for {request.path} from {request.remote_addr}")
     logger.info(f"Request body: {request.get_data(as_text=True)}")
 
-   
 @app.after_request
 @jwt_required(optional=True)
 def log_response(response):
@@ -404,17 +401,10 @@ def ArtifactLineageGet(id):
     
     return jsonify({'message': 'Not implemented'}), 501
 
-
-@app.route('/artifact/model/<id>/license-check', methods=['POST'])
+@app.route('/artifact/byRegEx', methods=['POST'])
 @check_permissions("search")
-def ArtifactLicenseCheck(id):
+def ArtifactByRegExGet():
     """No message provided."""
-    if id is None:
-        return jsonify({'error': 'There is missing field(s) in the artifact_id or it is formed improperly, or is invalid.'}), 400
-    
-    if not id.isdigit():
-        return jsonify({'error': 'Artifact does not exist.'}), 404
-    
     return jsonify({'message': 'Not implemented'}), 501
 
 
@@ -429,7 +419,7 @@ def get_tracks():
 
 def run_api():
     app.run(
-        host='0.0.0.0',
+        host='localhost',
         port=int(os.environ.get("PORT", 5000)),
         debug=os.environ.get("DEBUG", "False") == "True"
     )

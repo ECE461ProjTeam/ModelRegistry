@@ -47,24 +47,19 @@ class Artifact(db.Model):
         super().__init__(**kwargs)
         self.ndjson = {}
         
+        self.ingestible = True  # Default to True; may be updated below
+        
         if self.type == "model":
             self.rate()
-            
-            if CHECK_INGESTIBILITY:
-                if self.check_ingestible():
-                    self.ingestible = True
-                else:
-                    logger.warning(f"Artifact {self.id} is not ingestible; skipping upload to S3.")
-                    self.ingestible = False
-                    return
-            else:
-                self.ingestible = True          
-            try:
-                self.send_to_bucket()
-            except Exception as e:
-                logger.error(f"Error sending artifact {self.id} to bucket: {e}")
-        else:
-            self.ingestible = True  # For non-model artifacts, set ingestible to True by default
+            if CHECK_INGESTIBILITY and not self.check_ingestible():
+                logger.warning(f"Artifact {self.id} is not ingestible; skipping upload to S3.")
+                self.ingestible = False
+                return
+        
+        try:
+            self.send_to_bucket()
+        except Exception as e:
+            logger.error(f"Error sending artifact {self.id} to bucket: {e}")
                 
         
     @staticmethod
@@ -105,21 +100,30 @@ class Artifact(db.Model):
     
     def send_to_bucket(self):
         """Download model files and store them in S3."""
-        logger.info(f"Downloading model files for artifact {self.id} from {self.url}")
-        local_dir = download_hf_model(self.url, cache_dir="./hf_cache")
+        if self.type != "model":
+            logger.info(f"Artifact {self.id} is of type {self.type}; skipping file download")
+            local_dir = f"./hf_cache/{self.type}--{self.name}"
+            os.makedirs(local_dir, exist_ok=True)
+            logger.info(f"Creating placeholder files for {self.type} artifact {self.id}")
+            with open(f"{local_dir}/{self.name}_metadata.txt", 'w+') as f:
+                f.write("Name: " + self.name + "\n" + "URL: " + self.url + "\n" + "Type: " + self.type + "\n")
+        
+        else:
+            logger.info(f"Downloading model files for artifact {self.id} from {self.url}")
+            local_dir = download_hf_model(self.url, cache_dir="./hf_cache")
 
-        if local_dir is None:
-            logger.error(f"Failed to download model files for artifact {self.id} from {self.url}")
-            return
-        logger.info(f"Downloaded model files to {local_dir}")
+            if local_dir is None:
+                logger.error(f"Failed to download model files for artifact {self.id} from {self.url}")
+                return
+            logger.info(f"Downloaded model files to {local_dir}")
 
         try:
             with open(f'{local_dir}/README.md', 'r') as f:
                 self.readme = f.read()
+                logger.info(f"Read README.md for artifact {self.id}")
         except Exception as e:
             logger.error(f"Could not read README.md for artifact {self.id}: {e}")
             self.readme = ""
-        logger.info(f"Read README.md for artifact {self.id}")
 
         try:
             self.zip_model(local_dir)

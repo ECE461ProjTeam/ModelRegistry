@@ -10,6 +10,7 @@ import SystemHealthDashboard from "./components/SystemHealthDashboard.jsx";
 import ArtifactsList from "./components/ArtifactsList.jsx";
 import ArtifactDetails from "./components/ArtifactDetails.jsx";   // ← NEW
 import AdminReset from "./components/AdminReset.jsx";
+import UserPage from "./components/UserPage.jsx";
 
 function PrivateRoute({ element }) {
   const { user, loading } = useAuth();

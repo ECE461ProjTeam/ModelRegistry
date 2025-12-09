@@ -1,4 +1,4 @@
-import React, { createContext, useState, useContext, useMemo, useEffect } from 'react';
+import React, { createContext, useState, useContext, useEffect } from 'react';
 import API_ENDPOINTS from '../config/api';
 
 const AuthContext = createContext();
@@ -8,31 +8,63 @@ const AuthProvider = ({ children }) => {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
 
+  // Centralized fetch wrapper
+  const authFetch = async (url, options = {}) => {
+    const token = localStorage.getItem("token");
+    const res = await fetch(url, {
+      ...options,
+      headers: {
+        "Content-Type": "application/json",
+        ...(token ? { "X-Authorization": token } : {}),
+        ...(options.headers || {})
+      }
+    });
+
+    if (res.status === 401) {
+      if (token) {
+        // Token was present → session expired
+        logout();
+        throw new Error("Session expired. Please login again.");
+      } else {
+        // No token → user not logged in
+        throw new Error("You must be logged in to access this resource.");
+      }
+    }
+
+    if (res.status === 403) {
+      // User logged in but doesn't have permission
+      throw new Error("You do not have permission to access this resource.");
+    }
+
+    if (!res.ok) {
+      const message = await res.text();
+      throw new Error(message || "Something went wrong.");
+    }
+
+    return res.json();
+  };
+
+  // Login function
   const login = async (username, password) => {
     setError(null);
     setLoading(true);
     try {
-      const res = await fetch(API_ENDPOINTS.AUTHENTICATE, {
+      const tokenResponse = await fetch(API_ENDPOINTS.AUTHENTICATE, {
         method: 'PUT',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ user: { name: username }, secret: { password } }),
       });
 
-      if (!res.ok) throw new Error("Invalid credentials");
+      if (!tokenResponse.ok) throw new Error("Invalid credentials");
 
-      const token = await res.json();
+      const token = await tokenResponse.json();
       localStorage.setItem("token", token);
 
-      const profileRes = await fetch(API_ENDPOINTS.PROFILE, {
-        headers: { "X-Authorization": token }
-      });
-
-      if (profileRes.ok) {
-        const profileData = await profileRes.json();
+      try {
+        const profileData = await authFetch(API_ENDPOINTS.PROFILE);
         setUser(profileData.profile || { name: username });
-      } else {
-        // Fallback to basic user info if profile fetch fails
-        setUser({ name: username });
+      } catch {
+        setUser({ name: username }); // fallback if profile fails
       }
 
       return true;
@@ -50,35 +82,33 @@ const AuthProvider = ({ children }) => {
     setLoading(false);
   };
 
+  // Restore user on page load
   useEffect(() => {
     const token = localStorage.getItem("token");
     if (!token) return setLoading(false);
 
     const restore = async () => {
       try {
-        const res = await fetch(API_ENDPOINTS.PROFILE, {
-          headers: { "X-Authorization": token }
-        });
-        if (!res.ok) throw new Error();
-
-        const data = await res.json();
+        const data = await authFetch(API_ENDPOINTS.PROFILE);
         setUser(data.profile);
-      } catch {
-        localStorage.removeItem("token");
+      } catch (err) {
+        setError(err.message); // show session expired message if token invalid
+      } finally {
+        setLoading(false);
       }
-      setLoading(false);
     };
 
     restore();
   }, []);
 
   return (
-    <AuthContext.Provider value={{ user, loading, error, login, logout }}>
+    <AuthContext.Provider value={{ user, loading, error, login, logout, authFetch }}>
       {children}
     </AuthContext.Provider>
   );
 };
 
+// Custom hook
 export function useAuth() {
   const context = useContext(AuthContext);
   if (!context) {
@@ -88,4 +118,3 @@ export function useAuth() {
 }
 
 export { AuthProvider };
-
