@@ -143,7 +143,7 @@ def license_check(model_id):
         
         if not model_license:
             logger.warning(f"No license information available for model {model_id}")
-            return jsonify({'error': 'External license information could not be retrieved.'}), 502
+            return jsonify(False), 200
             
         # Fetch GitHub license
         github_license, status = fetch_github_license(github_url)
