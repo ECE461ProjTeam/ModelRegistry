@@ -298,25 +298,17 @@ def ArtifactRetrieve(artifact_type, id):
 
     return jsonify({'error': 'Artifact does not exist.'}), 404
 
-# @app.route('/artifacts/model/<id>/download', methods=['POST'])
-# @check_permissions("search", "download")
-# def ArtifactDownload(artifact_type, id):
-#     """Return download link for this artifact and log the download."""
-
-#     if not id.isdigit():
-#         return jsonify({'error': 'Artifact does not exist.'}), 404
-
-#     artifact = Artifact.query.filter_by(id=int(id)).first()
-#     if not artifact:
-#         return jsonify({'error': 'Artifact does not exist.'}), 404
+@app.route('/artifact/model/<id>/download_history', methods=['GET'])
+@check_permissions("search", "download")
+def ArtifactDownloadHistory(id):
     
-#     dowload_url = artifact.download_url
+    if not id.isdigit():
+        return jsonify({'error': 'There is missing field(s) in the artifact_id or it is formed improperly, or is invalid.'}), 400
+    model = Artifact.query.filter_by(id=int(id), type='model', sensitive=True).first()
+    if not model:
+        return jsonify({'error': 'Artifact does not exist.'}), 404
     
-#     if artifact.sensitive:
-#         userid = get_jwt_identity()
-#         user = User.query.filter_by(id=userid).first()
-#         artifact.download_history.append({"timestamp": str(request.date), "username": user.name})
-        
+    return jsonify({'download_history': model.download_history}), 200
     
 
 
