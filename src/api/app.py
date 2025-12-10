@@ -25,6 +25,7 @@ from .s3 import clear_s3_bucket
 import os
 import re
 from sqlalchemy import event
+from sqlalchemy.orm.attributes import flag_modified
 from .byRegex import regex_bp
 import subprocess
 import tempfile
@@ -254,7 +255,10 @@ def ArtifactRetrieve(artifact_type, id):
     res = {}
     
     if artifact.type == artifact_type:
-        
+        metadata = {"id": artifact.id, "name": artifact.name, "type": artifact.type}
+        data = {"url": artifact.url, "download_url": artifact.download_url}
+        res.update({"metadata": metadata, "data": data})
+
         if artifact.sensitive:
             # Run JS program here
             jsprog = artifact.js_program
@@ -265,24 +269,32 @@ def ArtifactRetrieve(artifact_type, id):
             passed, code, message = run_js_program(jsprog, artifact.name, artifact.uploader_name, user, artifact.download_url)
             
             if not passed:
-                return jsonify({'error': f"JS program failed with code {code}: {message}"}), 403
+                res["message"] = message
+                res["data"]["download_url"] = ""
+                return_code = 203
             
-            if code != 0:
-                return jsonify({'error': f"JS program failed with code {code}: {message}"}), 403
+            elif code != 0:
+                res["stdout"] = message
+                res["message"] = "JS program returned non-zero exit code"
+                res["data"]["download_url"] = ""
+                return_code = 202
+
             else:
                 logger.info(f"Sensitive model download authorized")
                 # Log download history
                 history = artifact.download_history
                 history.append({"timestamp": str(datetime.now()), "username": user})
                 print(history)
-                artifact.download_history = jsonify(history)
+                artifact.download_history = history
+                flag_modified(artifact, "download_history")
                 db.session.commit()
+                res['stdout'] = message
+                res["message"] = "JS program executed successfully. Download Authorized."
+                return_code = 200
+        else:
+            return_code = 200
                         
-            
-        metadata = {"id": artifact.id, "name": artifact.name, "type": artifact.type}
-        data = {"url": artifact.url, "download_url": artifact.download_url}
-        res.update({"metadata": metadata, "data": data})
-        return jsonify(res), 200
+        return jsonify(res), return_code
 
     return jsonify({'error': 'Artifact does not exist.'}), 404
 
