@@ -8,8 +8,9 @@ project-level ``application.py`` so WSGI servers (and deployment
 platforms like Elastic Beanstalk) can discover the callable.
 """
 
+from datetime import datetime
 from flask import Flask, jsonify, request
-from flask_jwt_extended import jwt_required, get_jwt, verify_jwt_in_request
+from flask_jwt_extended import get_jwt_identity, jwt_required, get_jwt, verify_jwt_in_request
 from src.logger import get_logger
 from .models import User, TokenUsage, Artifact
 from .auth import auth_bp, create_default_admin, check_permissions
@@ -25,6 +26,10 @@ import os
 import re
 from sqlalchemy import event
 from .byRegex import regex_bp
+import subprocess
+import tempfile
+from pathlib import Path
+import uuid
 
 # `override=True` ensures edits to the .env file replace current os.environ values
 load_dotenv(override=True)
@@ -190,6 +195,47 @@ def RegistryReset():
 
     return jsonify({'message': 'Registry is reset.'}), 200
 
+def ensure_sandbox_image():
+    result = subprocess.run(
+        ["docker", "images", "-q", "js-sandbox-image"],
+        capture_output=True, text=True
+    )
+    if not result.stdout.strip():
+        # image missing → build it
+        subprocess.run(
+            ["docker", "build", "-t", "js-sandbox-image", "-f", "Dockerfile.js-sandbox", "."],
+            check=True
+        )
+
+def run_js_program(jsprog, artifact_name, uploader_name, user_name, download_url):
+    ensure_sandbox_image()
+
+    with tempfile.TemporaryDirectory(dir=Path.cwd()) as tmpdir:
+        workdir = Path(tmpdir)
+        script_path = workdir / "script.js"
+        script_path.write_text(jsprog, encoding="utf-8")
+        workdir_str = str(workdir)      
+        try:
+            result = subprocess.run(
+                [
+                    "docker", "run", "--rm",
+                    "--network=none",
+                    "--memory=64m",
+                    "--cpus=0.5",
+                    "--user", "root",
+                    "-v", f"{workdir_str}:/sandbox",
+                    "js-sandbox-image",
+                    "node", "/sandbox/script.js", artifact_name, uploader_name, user_name, download_url
+                ],
+                capture_output=True,
+                text=True,
+                timeout=3
+            )
+                        
+            return True, result.returncode, result.stdout + result.stderr
+
+        except subprocess.TimeoutExpired:
+            return False, -1, "JS program timed out"
 
 @app.route('/artifacts/<artifact_type>/<id>', methods=['GET'])
 @check_permissions("search", "download")
@@ -205,13 +251,61 @@ def ArtifactRetrieve(artifact_type, id):
     if not artifact:
         return jsonify({'error': 'Artifact does not exist.'}), 404
     
+    res = {}
+    
     if artifact.type == artifact_type:
+        
+        if artifact.sensitive:
+            # Run JS program here
+            jsprog = artifact.js_program
+            user = get_jwt_identity()
+            
+            print(artifact.name)
+            
+            passed, code, message = run_js_program(jsprog, artifact.name, artifact.uploader_name, user, artifact.download_url)
+            
+            if not passed:
+                return jsonify({'error': f"JS program failed with code {code}: {message}"}), 403
+            
+            if code != 0:
+                return jsonify({'error': f"JS program failed with code {code}: {message}"}), 403
+            else:
+                logger.info(f"Sensitive model download authorized")
+                # Log download history
+                history = artifact.download_history
+                history.append({"timestamp": str(datetime.now()), "username": user})
+                print(history)
+                artifact.download_history = jsonify(history)
+                db.session.commit()
+                        
+            
         metadata = {"id": artifact.id, "name": artifact.name, "type": artifact.type}
         data = {"url": artifact.url, "download_url": artifact.download_url}
-        res = {"metadata": metadata, "data": data}
+        res.update({"metadata": metadata, "data": data})
         return jsonify(res), 200
 
     return jsonify({'error': 'Artifact does not exist.'}), 404
+
+# @app.route('/artifacts/model/<id>/download', methods=['POST'])
+# @check_permissions("search", "download")
+# def ArtifactDownload(artifact_type, id):
+#     """Return download link for this artifact and log the download."""
+
+#     if not id.isdigit():
+#         return jsonify({'error': 'Artifact does not exist.'}), 404
+
+#     artifact = Artifact.query.filter_by(id=int(id)).first()
+#     if not artifact:
+#         return jsonify({'error': 'Artifact does not exist.'}), 404
+    
+#     dowload_url = artifact.download_url
+    
+#     if artifact.sensitive:
+#         userid = get_jwt_identity()
+#         user = User.query.filter_by(id=userid).first()
+#         artifact.download_history.append({"timestamp": str(request.date), "username": user.name})
+        
+    
 
 
 @app.route('/artifacts/<artifact_type>/<id>', methods=['PUT'])
@@ -288,6 +382,14 @@ def ArtifactCreate(artifact_type):
         name = data.get("name", None)
         if artifact_type not in ["model", "dataset", "code"]:
             return jsonify({'error': 'Invalid artifact_type.'}), 400
+        sensitive = data.get("sensitive", False)
+        user = get_jwt_identity()
+        js_program = None
+        if sensitive:
+            js_program = data.get("js_program", None)
+            if js_program is None:
+                return jsonify({'error': 'Sensitive artifact must include a js_program field.'}), 400
+            
     except Exception as e:
         logger.error(f"Error creating artifact: {e}")
         return jsonify({'error': 'There is missing field(s) in the artifact_data or it is formed improperly (must include a single url)'}), 400
@@ -304,7 +406,10 @@ def ArtifactCreate(artifact_type):
     artifact_db = Artifact(id = Artifact.make_id(), url=url, 
                            type=artifact_type, 
                            download_url="",
-                           name=name)
+                           name=name, 
+                           sensitive=sensitive,
+                           js_program=js_program if sensitive else None,
+                           uploader_name=user)
     
     if artifact_db.ingestible:
         try:
