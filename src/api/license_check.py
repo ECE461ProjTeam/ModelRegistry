@@ -117,14 +117,33 @@ def license_check(model_id):
             logger.warning(f"Model with ID {model_id} not found")
             return jsonify({'error': 'The artifact or GitHub project could not be found.'}), 404
             
+        # Fetch GitHub license
+        github_license, status = fetch_github_license(github_url)
+        
+        if status == 404:
+            return jsonify({'error': 'The artifact or GitHub project could not be found.'}), 404
+        elif status == 502:
+            return jsonify({'error': 'External license information could not be retrieved.'}), 502
+
+
         # Get model's license from stored metric data
         model_license = None
         if model.ndjson and isinstance(model.ndjson, dict):
-            license_compliance_data = model.ndjson.get('license_compliance', {})
-            if isinstance(license_compliance_data, dict):
-                details = license_compliance_data.get('details', {})
-                if isinstance(details, dict):
-                    model_license = details.get('license')
+                hf_metadata = model.ndjson.get('lineage', {})
+                # logger.debug(f"Extracted hf metadata from ndjson for license-check: {hf_metadata}")
+                if isinstance(hf_metadata, dict):
+                    all_tags = hf_metadata.get('tags')
+                    # logger.debug(f"found tags for model: {all_tags}")
+
+                    # commonly the last item
+                    if "license" in all_tags[-1]:
+                        model_license = all_tags[-1]
+                    # otherwise check them all
+                    else: 
+                        for tag in all_tags:
+                            if tag.startswith('license'):
+                                model_license = tag.split(":", 1)[1]
+                                logger.debug(f"Found license tag for model: {model_license}")
         
         # Fallback: run license metric if no stored data
         if not model_license:
@@ -145,13 +164,6 @@ def license_check(model_id):
             logger.warning(f"No license information available for model {model_id}")
             return jsonify(False), 200
             
-        # Fetch GitHub license
-        github_license, status = fetch_github_license(github_url)
-        
-        if status == 404:
-            return jsonify({'error': 'The artifact or GitHub project could not be found.'}), 404
-        elif status == 502:
-            return jsonify({'error': 'External license information could not be retrieved.'}), 502
         model_license_normalized = normalize_license(model_license)
         github_license_normalized = normalize_license(github_license)
         
