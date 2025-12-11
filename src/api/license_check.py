@@ -54,8 +54,11 @@ def fetch_github_license(github_url):
         
         if response.status_code == 404:
             return None, 404
-        
-        if not response.ok:
+
+        if response.status_code == 403:
+            logger.warning(f"GitHub API rate limit exceeded or access forbidden for {github_url}")
+            return None, 403
+        elif not response.ok:
             return None, 502
         
         data = response.json()
@@ -122,6 +125,8 @@ def license_check(model_id):
         
         if status == 404:
             return jsonify({'error': 'The artifact or GitHub project could not be found.'}), 404
+        elif status == 403:
+            return jsonify({'error': 'Authentication failed due to invalid or missing AuthenticationToken.'}), 403
         elif status == 502:
             return jsonify({'error': 'External license information could not be retrieved.'}), 502
 
