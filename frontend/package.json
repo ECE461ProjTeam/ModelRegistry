@@ -7,7 +7,10 @@
     "dev": "vite",
     "build": "vite build",
     "lint": "eslint .",
-    "preview": "vite preview"
+    "preview": "vite preview",
+
+    "test:e2e": "playwright test",
+    "test:install": "playwright install"
   },
   "dependencies": {
     "axios": "^1.12.2",
@@ -19,6 +22,7 @@
   },
   "devDependencies": {
     "@eslint/js": "^9.36.0",
+    "@playwright/test": "^1.49.0",
     "@types/react": "^19.1.16",
     "@types/react-dom": "^19.1.9",
     "@vitejs/plugin-react": "^5.0.4",
@@ -33,3 +37,4 @@
     "npm": ">=9.8.0"
   }
 }
+
