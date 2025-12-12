@@ -8,6 +8,7 @@ import LoadingSpinner from "../components/LoadingSpinner.jsx";
 
 export default function UploadArtifact() {
   const [url, setUrl] = useState("");
+  const [name, setName] = useState("");   // ← NEW FIELD
   const [type, setType] = useState("model");
   const [success, setSuccess] = useState("");
   const [error, setError] = useState("");
@@ -25,13 +26,7 @@ export default function UploadArtifact() {
       return setError("Invalid URL format.");
     }
 
-    let name;
-    try {
-      const parsed = new URL(url);
-      name = parsed.pathname.split("/").filter(Boolean).pop() || type;
-    } catch {
-      name = type;
-    }
+    if (!name.trim()) return setError("Please enter a name.");
 
     try {
       setLoading(true);
@@ -39,13 +34,14 @@ export default function UploadArtifact() {
 
       const res = await axios.post(
         API_ENDPOINTS.ARTIFACT_CREATE(type),
-        { url, name },
+        { url, name },  // ← now includes "name"
         { headers: { "X-Authorization": token } }
       );
 
       if (res.status === 201) {
         setSuccess(`${type} uploaded successfully!`);
         setUrl("");
+        setName("");
       }
     } catch (err) {
       setError(err.response?.data?.message || "Upload failed. Please try again.");
@@ -61,12 +57,16 @@ export default function UploadArtifact() {
         <h1>Upload Artifact</h1>
 
         <div className="card">
-          <label className="label">Artifact Type</label>
-          <select
-            className="input-select"
-            value={type}
-            onChange={(e) => setType(e.target.value)}
-          >
+
+          <label className="label">Artifact Name</label>
+          <input
+            placeholder="my-model-v1"
+            value={name}
+            onChange={(e) => setName(e.target.value)}
+          />
+
+          <label className="label" style={{ marginTop: "1rem" }}>Artifact Type</label>
+          <select className="input-select" value={type} onChange={(e) => setType(e.target.value)}>
             <option value="model">Model</option>
             <option value="dataset">Dataset</option>
             <option value="code">Code</option>
@@ -79,13 +79,7 @@ export default function UploadArtifact() {
             onChange={(e) => setUrl(e.target.value)}
           />
 
-          {loading ? (
-            <LoadingSpinner />
-          ) : (
-            <button onClick={submit} style={{ marginTop: "1.3rem" }}>
-              Upload
-            </button>
-          )}
+          {loading ? <LoadingSpinner /> : <button onClick={submit} style={{ marginTop: "1.3rem" }}>Upload</button>}
 
           <SuccessBanner message={success} />
           <ErrorBanner message={error} />
@@ -94,5 +88,6 @@ export default function UploadArtifact() {
     </>
   );
 }
+
 
 
