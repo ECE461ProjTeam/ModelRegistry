@@ -263,9 +263,7 @@ def ArtifactRetrieve(artifact_type, id):
             # Run JS program here
             jsprog = artifact.js_program
             user = get_jwt_identity()
-            
-            print(artifact.name)
-            
+                        
             passed, code, message = run_js_program(jsprog, artifact.name, artifact.uploader_name, user, artifact.download_url)
             
             if not passed:
@@ -284,7 +282,6 @@ def ArtifactRetrieve(artifact_type, id):
                 # Log download history
                 history = artifact.download_history
                 history.append({"timestamp": str(datetime.now()), "username": user})
-                print(history)
                 artifact.download_history = history
                 flag_modified(artifact, "download_history")
                 db.session.commit()
