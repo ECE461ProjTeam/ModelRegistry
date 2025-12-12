@@ -148,6 +148,6 @@ button:hover {
 }
 
 .scrollable-logs:focus {
-  outline: 2px solid #3b82f6;
+  outline: 2px solid var(--btn-bg);
   outline-offset: 4px;
 }
