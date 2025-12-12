@@ -503,9 +503,11 @@ def system_health_components():
     except (ValueError, TypeError):
         return jsonify({"message": "windowMinutes must be an integer."}), 400
     
-    # Ensure window_minutes is positive
-    if window_minutes <= 0:
-        return jsonify({"message": "windowMinutes must be a positive integer."}), 400
+    # Ensure window_minutes is between 5 and 1440
+    if window_minutes <= 5:
+        return jsonify({"message": "Window Minutes must be a positive integer greater than 5."}), 400
+    elif window_minutes > 1440:
+        return jsonify({"message": "Window Minutes must not exceed 1440 (24 hours)."}), 400
 
     # Ensure includeTimeline is a boolean, if not return 400
     include_timeline_raw = req_data.get("includeTimeline", None)
