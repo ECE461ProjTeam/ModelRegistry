@@ -194,7 +194,7 @@ export default function UserPage() {
               onClick={() => handleDelete(profile.name)}
               style={{
                 padding: "0.25rem 0.5rem",
-                backgroundColor: "#ef4444",
+                backgroundColor: "#d73c3c",
                 color: "white",
                 border: "none",
                 borderRadius: "4px",
@@ -219,7 +219,7 @@ export default function UserPage() {
                 onClick={() => setShowRegister(true)}
                 style={{
                   padding: "0.5rem 1rem",
-                  backgroundColor: "#3b82f6",
+                  backgroundColor: "#326ed1",
                   color: "white",
                   border: "none",
                   borderRadius: "5px",
@@ -277,7 +277,7 @@ export default function UserPage() {
                       onClick={() => handleDelete(user.name)}
                       style={{
                         padding: "0.15rem 0.3rem",
-                        backgroundColor: "#ef4444",
+                        backgroundColor: "#d73c3c",
                         color: "white",
                         border: "none",
                         borderRadius: "4px",
@@ -375,7 +375,7 @@ export default function UserPage() {
                       onClick={handleRegisterSubmit}
                       style={{
                         padding: "0.35rem 0.7rem",
-                        backgroundColor: "#3b82f6",
+                        backgroundColor: "#326ed1",
                         color: "white",
                         border: "none",
                         borderRadius: "5px",
