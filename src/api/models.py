@@ -42,10 +42,17 @@ class Artifact(db.Model):
     cost = db.Column(db.Float, nullable=True)  # in MB
     ingestible = db.Column(db.Boolean, default=False)
     readme = db.Column(db.Text, nullable=True)
+    sensitive = db.Column(db.Boolean, default=False)
+    download_history = db.Column(db.JSON, nullable=True, default=None)
+    js_program = db.Column(db.Text, nullable=True)
+    uploader_name = db.Column(db.String(150), nullable=True)
     
     def __init__(self, **kwargs):
         super().__init__(**kwargs)
         self.ndjson = {}
+        
+        if self.sensitive:
+            self.download_history = list()
         
         self.ingestible = True  # Default to True; may be updated below
         
