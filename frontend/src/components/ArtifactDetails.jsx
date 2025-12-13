@@ -92,8 +92,15 @@ function renderJsonObject(obj) {
       if (!dataBlock?.url)
         throw new Error("Backend did not provide a download URL.");
 
-      // trigger real download
-      window.location.href = dataBlock.url;
+      // trigger real download without navigating away
+      const link = document.createElement('a');
+      link.href = dataBlock.url;
+      // Try to extract a filename from the URL, fallback to 'download'
+      const urlParts = dataBlock.url.split('/');
+      link.download = urlParts[urlParts.length - 1] || 'download';
+      document.body.appendChild(link);
+      link.click();
+      document.body.removeChild(link);
 
       return "Downloading...";
     });
