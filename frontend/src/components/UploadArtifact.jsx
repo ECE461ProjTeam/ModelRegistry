@@ -61,15 +61,16 @@ export default function UploadArtifact() {
         <h1>Upload Artifact</h1>
 
         <div className="card">
-          <label className="label">Artifact Type</label>
+          <label className="label" htmlFor="artifact-type">Artifact Type</label>
           <select
+            id="artifact-type"
             className="input-select"
             value={type}
             onChange={(e) => setType(e.target.value)}
           >
-            <option value="model">Model</option>
-            <option value="dataset">Dataset</option>
-            <option value="code">Code</option>
+          <option value="model">Model</option>
+          <option value="dataset">Dataset</option>
+          <option value="code">Code</option>
           </select>
 
           <label className="label" style={{ marginTop: "1rem" }}>URL</label>

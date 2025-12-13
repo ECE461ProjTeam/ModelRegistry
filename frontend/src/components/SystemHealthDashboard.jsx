@@ -62,14 +62,12 @@ export default function SystemHealthDashboard() {
       });
 
       if (!res.ok) {
-        let errMsg = `Server returned ${res.status}: ${res.statusText} - unable to fetch components. Please ensure you have the necessary permissions.`;
+        let errMsg = `Server returned ${res.status}: ${res.statusText}`;
 
         try {
           const errData = await res.json();
           if (errData?.message) errMsg = errData.message;
-        } catch {
-          // ignore json parse errors
-        }
+        } catch {}
 
         setComponentsError(errMsg);
         setComponents([]);
@@ -80,7 +78,6 @@ export default function SystemHealthDashboard() {
       setComponents(data?.components || []);
       setComponentsError(null);
     } catch (err) {
-      console.error("Error fetching components:", err);
       setComponentsError(err?.message || "Unable to fetch components");
       setComponents([]);
     } finally {
@@ -93,11 +90,9 @@ export default function SystemHealthDashboard() {
     fetchComponents();
   }, [fetchHealth, fetchComponents]);
 
-  // Initial fetch only (no dependency on windowMinutes)
   useEffect(() => {
     fetchAll();
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
+  }, []); // only run once
 
   const renderMetricChart = (timeline, metric) => {
     if (!timeline?.[metric]?.length) return null;
@@ -107,7 +102,7 @@ export default function SystemHealthDashboard() {
       Value: Number(point.Average || 0),
     }));
 
-    const COLORS = ["#22c55e", "#f59e0b", "#3b82f6", "#ef4444", "#8b5cf6", "#14b8a6"];
+    const COLORS = ["#22c55e", "#f59e0b", "#326ed1", "#ef4444", "#8b5cf6", "#14b8a6"];
     const color = COLORS[Math.floor(Math.random() * COLORS.length)];
 
     return (
@@ -142,10 +137,9 @@ export default function SystemHealthDashboard() {
             id="windowMinutes"
             value={windowMinutes}
             min={1}
-            step="1"
             onChange={(e) => {
-              const value = Number(e.target.value);
-              setWindowMinutes(Number.isNaN(value) || value < 1 ? 1 : value);
+              const v = Number(e.target.value);
+              setWindowMinutes(v < 1 || Number.isNaN(v) ? 1 : v);
             }}
             style={{
               padding: "0.5rem",
@@ -161,7 +155,7 @@ export default function SystemHealthDashboard() {
             style={{
               marginTop: "0.5rem",
               padding: "0.6rem 1rem",
-              backgroundColor: loading ? "#94a3b8" : "#3b82f6",
+              backgroundColor: loading ? "#94a3b8" : "#326ed1",
               color: "white",
               border: "none",
               borderRadius: "5px",
@@ -201,6 +195,7 @@ export default function SystemHealthDashboard() {
           components.map((component) => (
             <div key={component.id} className="card" style={{ marginBottom: "1.5rem" }}>
               <h3>{component.display_name}</h3>
+
               <p>
                 Status:{" "}
                 <span
@@ -216,8 +211,10 @@ export default function SystemHealthDashboard() {
                   {component.status}
                 </span>
               </p>
+
               <p>Observed At: {new Date(component.observed_at).toLocaleString()}</p>
 
+              {/* Metrics */}
               {component.metrics && (
                 <>
                   <h4>Metrics:</h4>
@@ -231,20 +228,30 @@ export default function SystemHealthDashboard() {
                 </>
               )}
 
+              {/* Charts */}
               {component.timeline &&
                 Object.keys(component.timeline).map((metric) =>
                   renderMetricChart(component.timeline, metric)
                 )}
 
+              {/* Logs - ADA compliant */}
               {component.logs?.length > 0 && (
                 <>
                   <h4>Logs:</h4>
-                  <ul style={{ maxHeight: "300px", overflowY: "auto" }}>
+                  <ul
+                    className="scrollable-logs"
+                    tabIndex="0"
+                    style={{
+                      maxHeight: "300px",
+                      overflowY: "auto",
+                      padding: "0",
+                      margin: "0",
+                      outline: "none",
+                    }}
+                  >
                     {component.logs.map((log, idx) => (
                       <li key={idx}>
-                        <strong>
-                          {new Date(log.timestamp).toLocaleString()}:
-                        </strong>{" "}
+                        <strong>{new Date(log.timestamp).toLocaleString()}:</strong>{" "}
                         {log.message}
                       </li>
                     ))}
@@ -258,3 +265,4 @@ export default function SystemHealthDashboard() {
     </>
   );
 }
+
