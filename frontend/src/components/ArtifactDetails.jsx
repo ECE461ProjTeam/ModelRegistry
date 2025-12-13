@@ -148,21 +148,21 @@ function renderJsonObject(obj) {
 
 
   const handleLineage = () =>
-  run(async () => {
-    const res = await axios.get(API_ENDPOINTS.ARTIFACT_LINEAGE(id), {
-      headers: { "X-Authorization": token },
+    run(async () => {
+      const res = await axios.get(API_ENDPOINTS.ARTIFACT_LINEAGE(id), {
+        headers: { "X-Authorization": token },
+      });
+
+      const graph = res.data;
+
+      if (!graph?.nodes || graph.nodes.length === 0)
+        return "No lineage available.";
+
+      if (graph.nodes.length === 1)
+        return "This model has no lineage relationships.";
+
+      return graph;
     });
-
-    const graph = res.data;
-
-    if (!graph?.nodes || graph.nodes.length === 0)
-      return "No lineage available.";
-
-    if (graph.nodes.length === 1)
-      return "This model has no lineage relationships.";
-
-    return graph;
-  });
 
   return (
     <>
