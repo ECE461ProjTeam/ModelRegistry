@@ -131,6 +131,11 @@ function renderJsonObject(obj) {
   run(async () => {
     const githubUrl = window.prompt("Enter a GitHub repository URL:");
     if (!githubUrl) throw new Error("GitHub URL is required.");
+    // Validate GitHub repository URL format
+    const githubRepoRegex = /^https:\/\/github\.com\/[\w.-]+\/[\w.-]+(\/)?$/i;
+    if (!githubRepoRegex.test(githubUrl.trim())) {
+      throw new Error("Please enter a valid GitHub repository URL (e.g., https://github.com/owner/repo).");
+    }
 
     const res = await axios.post(
       API_ENDPOINTS.ARTIFACT_LICENSE_CHECK(id),
