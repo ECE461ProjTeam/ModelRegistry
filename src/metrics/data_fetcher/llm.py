@@ -52,3 +52,32 @@ def get_genai_metric_data(model_url: str, prompt: str) -> Dict[str, Any]:
     except Exception as e:
         logger.debug(f"GenAI call failed: {e}")
         return {}
+    
+def get_genai_dataset_code_links(model_url: str, prompt: str) -> Dict[str, Any]:
+    if not PURDUE_GENAI_API_KEY:
+        logger.debug("GEN AI API key not set; skipping GenAI call")
+        return {}
+
+    headers = {
+        "Authorization": f"Bearer {PURDUE_GENAI_API_KEY}",
+        "Content-Type": "application/json",
+    }
+    body = {
+        "model": "llama4:latest",
+        "messages": [
+            {"role": "user", "content": prompt + " " + model_url}
+        ],
+    }
+
+    try:
+        resp = requests.post(
+            PURDUE_GENAI_URL, headers=headers, json=body, timeout=20)
+        resp.raise_for_status()
+        data = resp.json()
+        response = data.get("choices", [{}])[0].get(
+            "message", {}).get("content", "").strip()
+        return {"response": response}
+    except Exception as e:
+        logger.debug(f"GenAI call failed: {e}")
+        return {}
+

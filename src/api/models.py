@@ -19,6 +19,9 @@ from src.logger import get_logger
 from ..url_parsers.url_type_handler import handle_url
 from ..cli.validate import validate_ndjson
 import requests
+from src.metrics.data_fetcher.llm import get_genai_dataset_code_links
+from src.metrics.data_fetcher.huggingface import get_huggingface_file
+
 
 logger = get_logger("api.models")
 
@@ -70,6 +73,12 @@ class Artifact(db.Model):
         if self.ndjson != {}:
             logger.info("Model already rated, skipping re-rating.")
             return True
+        
+        readme_path = get_huggingface_file(self.url)
+        with open(readme_path, 'r') as f:
+            self.readme = f.read()
+        # logger.debug(self.readme)
+        self.extract_code_dataset_urls_from_llm()
         
         logger.info(f"Rating model artifact {self.id} with name {self.name}")
         try:
@@ -157,6 +166,56 @@ class Artifact(db.Model):
         zout.close()
                     
         self.cost = os.path.getsize(f"{local_dir}/{self.id}.zip") / (1024 * 1024)  # size in MB
+        
+    def extract_code_dataset_urls_from_llm(self):
+        from huggingface_hub import HfApi, model_info
+        from src.metrics.data_fetcher.utils import extract_hf_model_id
+        model_id = extract_hf_model_id(self.url)
+        if not model_id:
+            return {}
+
+        info = model_info(model_id)
+        data = {
+            "license": None,
+            "tags": getattr(info, "tags", []) or [],
+            "downloads": getattr(info, "downloads", 0) or 0,
+            "pipeline_tag": getattr(info, "pipeline_tag", None),
+            "model_id": getattr(info, "modelId", model_id),
+            "sha": getattr(info, "sha", None),
+            "card_data": getattr(info, "cardData", {}) or {},
+            "config": getattr(info, "config", {}) or {},
+        }
+        datasets = data["card_data"]     
+        
+        dataset_response = get_genai_dataset_code_links(self.url, 
+            f"Given the following huggingface model URL, one url for the \
+                huggingface page of the dataset it was trained on\
+                If it is not listed, return the word None_Found. \
+                For Datasets, look for these specifically, pick ONLY ONE: {datasets} \
+                As an example, if the dataset is 'bookcorpus', the link must be EXACTLY 'https://huggingface.co/datasets/bookcorpus/bookcorpus' \
+                and for 'wikipedia', the link must be EXACTLY 'https://huggingface.co/datasets/legacy-datasets/wikipedia'. \
+                Make sure the dataset links actually go to a dataset. \
+                Respond ONLY with the link. Do not add any justification, I just want the link.").get("response")
+        code_response = get_genai_dataset_code_links(self.url,
+            f"Given the following huggingface model readme, return one url for its \
+                github code repository. If it is not listed, return the word None_Found. \
+                Make sure the code link actually goes to a code repository. \
+                Ensure the link does not end with .html \
+                Respond with ONLY the link. No other text AT ALL. Do not add any justification, I just want the link. \
+                {self.readme}    ").get("response")
+        
+        dataset = dataset_response.strip() if dataset_response else None
+        code = code_response.strip() if code_response else None
+        if code != "None_Found" and code is not None:
+            if "/tree/" in code:
+                self.code_url = code.split("/tree/")[0]
+            else:
+                self.code_url = code
+            
+        if dataset != "None_Found" and dataset is not None:
+            self.dataset_url = dataset
+                
+        logger.debug(f"Extracted code URL: {self.code_url}, dataset URL: {self.dataset_url} from LLM response.")
         
     @staticmethod
     def is_valid_hf_url(url: str) -> bool:
