@@ -16,7 +16,7 @@ export default function Navbar() {
         <Link to="/user">Profile</Link>
       </div>
 
-      <button onClick={logout} style={{ background: "#ef4444" }}>
+      <button onClick={logout} style={{ background: "#d73c3c" }}>
         Logout
       </button>
     </nav>

@@ -79,7 +79,7 @@ def extract_lineage_from_hf_metadata(hf_metadata: Dict[str, Any]) -> Dict[str, A
                     model_name = parts[-1]  # Always take the last part (the model name)
                     if model_name and model_name not in lineage_data["base_model_hints"]:
                         lineage_data["base_model_hints"].append(model_name)
-                        logger.info(f"Found base_model from tag: {model_name}")
+                        logger.debug(f"Found base_model from tag: {model_name}")
     
     # Check 2: Look for base_model in card_data (model card metadata)
     # Format can be: string, list, or dict like {finetuned: "model-name"}
@@ -186,7 +186,63 @@ def merge_lineage_data(*lineage_dicts: Dict[str, Any]) -> Dict[str, Any]:
 
 def normalize_model_name(name: str) -> str:
     """Normalize a model name for comparison."""
-    return name.lower().strip()
+    if not name:
+        return ""
+    # Keep the full model ID including org prefix for accurate matching
+    normalized = name.lower().strip()
+    # Remove trailing slashes and clean up
+    normalized = normalized.rstrip('/')
+    return normalized
+
+def extract_model_id_from_url(url: str) -> str:
+    """Extract model ID from HuggingFace URL."""
+    if not url or "huggingface.co" not in url:
+        return ""
+
+    pattern = r'huggingface\.co/(?:models/)?([^/]+/[^/]+)'
+    match = re.search(pattern, url)
+    if match:
+        return match.group(1)
+    return ""
+
+def models_match(id1: str, id2: str) -> bool:
+    """Check if two model identifiers match, handling various formats."""
+    if not id1 or not id2:
+        return False
+    
+    norm1 = normalize_model_name(id1)
+    norm2 = normalize_model_name(id2)
+    
+    if norm1 == norm2:
+        return True
+    
+    if '/' in norm1 and '/' not in norm2:
+        if norm1.endswith('/' + norm2):
+            return True
+    elif '/' not in norm1 and '/' in norm2:
+        if norm2.endswith('/' + norm1):
+            return True
+    
+    if '/' in norm1 and '/' in norm2:
+        org1 = norm1.split('/')[0]
+        org2 = norm2.split('/')[0]
+        if org1 != org2:
+            return False
+    
+    common_suffixes = [
+        '-base', '-instruct', '-chat', '-sft', '-dpo', '-rlhf',
+        '-awq', '-gptq', '-gguf', '-ggml', '-q4', '-q5', '-q8',
+        '-hf', '-mlx', '-onnx',
+        '-v1', '-v2', '-v3', '-v4', '-preview', '-turbo'
+    ]
+    
+    for suffix in common_suffixes:
+        if norm1.endswith(suffix) and norm2 == norm1[:-len(suffix)]:
+            return True
+        if norm2.endswith(suffix) and norm1 == norm2[:-len(suffix)]:
+            return True
+    
+    return False
 
 
 def determine_lineage_source(lineage_data: Dict[str, Any]) -> str:
@@ -200,7 +256,6 @@ def determine_lineage_source(lineage_data: Dict[str, Any]) -> str:
     if lineage_data.get("base_model") is not None:
         return "model_card"
     elif lineage_data.get("base_model_hints"):
-        # Check if hints came from tags (we log this during extraction)
         return "huggingface_metadata"
     elif lineage_data.get("model_type"):
         return "config_json"
@@ -266,31 +321,39 @@ def find_parent_matches(target_lineage: Dict[str, Any],
     if not base_hints:
         return parents
     
-    # Normalize hints for matching
-    normalized_hints = {normalize_model_name(hint) for hint in base_hints}
-    
     for artifact in all_artifacts:
         # Get this artifact's lineage data
         artifact_lineage = artifact.ndjson.get("lineage", {}) if artifact.ndjson else {}
         artifact_model_id = artifact_lineage.get("model_id", "")
         
-        # Check if this artifact's model_id matches any of our hints
-        if artifact_model_id:
-            normalized_id = normalize_model_name(artifact_model_id)
-            if normalized_id in normalized_hints:
-                parents.append(artifact)
-                logger.debug(f"Found parent match: {artifact_model_id} (id={artifact.id})")
-                continue
+        artifact_url_id = extract_model_id_from_url(artifact.url) if artifact.url else ""
+        artifact_name = artifact.name or ""
+        
+        artifact_ids = [artifact_model_id, artifact_url_id, artifact_name]
+        artifact_ids = [aid for aid in artifact_ids if aid]
+        
+        matched = False
+        for hint in base_hints:
+            if matched:
+                break
+            for aid in artifact_ids:
+                if models_match(hint, aid):
+                    parents.append(artifact)
+                    matched = True
+                    break
     
     return parents
 
 
-def find_child_matches(target_model_id: str, all_artifacts: List[Any]) -> List[Any]:
+def find_child_matches(target_model_id: str, target_url: str, target_name: str, 
+                      all_artifacts: List[Any]) -> List[Any]:
     """
     Find child models from the database whose base_model_hints reference the target.
     
     Args:
         target_model_id: The target model's model_id from lineage
+        target_url: The target model's URL
+        target_name: The target model's name
         all_artifacts: List of all model artifacts from database
         
     Returns:
@@ -298,10 +361,12 @@ def find_child_matches(target_model_id: str, all_artifacts: List[Any]) -> List[A
     """
     children = []
     
-    if not target_model_id:
-        return children
+    target_url_id = extract_model_id_from_url(target_url) if target_url else ""
+    target_ids = [target_model_id, target_url_id, target_name]
+    target_ids = [tid for tid in target_ids if tid]
     
-    normalized_target_id = normalize_model_name(target_model_id)
+    if not target_ids:
+        return children
     
     for artifact in all_artifacts:
         # Get this artifact's lineage data
@@ -310,42 +375,48 @@ def find_child_matches(target_model_id: str, all_artifacts: List[Any]) -> List[A
         base_hints = artifact_lineage.get("base_model_hints", [])
         
         if not base_hints:
-            logger.debug(f"Artifact {artifact_model_id} (id={artifact.id}) has no base_model_hints")
             continue
         
-        logger.debug(f"Checking artifact {artifact_model_id} (id={artifact.id}) with hints: {base_hints}")
-        
-        # Check if any of this artifact's hints match our target
-        normalized_hints = {normalize_model_name(hint) for hint in base_hints}
-        
-        # First try exact matching
-        if normalized_target_id in normalized_hints:
-            children.append(artifact)
-            logger.debug(f"Found child match: {artifact_model_id} (id={artifact.id}) via exact match")
-        # Fallback: substring matching (e.g., "roberta-base" in "twitter-roberta-base-sentiment")
-        else:
-            for hint in normalized_hints:
-                # Use regex to match the target as a whole word or separated by delimiters
-                # Delimiters: start/end, -, _, /, or word boundary
-                pattern = r'(^|[-_/]){}($|[-_/])'.format(re.escape(normalized_target_id))
-                if re.search(pattern, hint):
+        matched = False
+        for hint in base_hints:
+            if matched:
+                break
+            for target_id in target_ids:
+                if models_match(hint, target_id):
                     children.append(artifact)
-                    logger.debug(f"Found child match: {artifact_model_id} (id={artifact.id}) via regex match in hint '{hint}'")
-                
-                # if normalized_target_id in hint:
-                #     children.append(artifact)
-                #     logger.debug(f"Found child match: {artifact_model_id} (id={artifact.id}) via substring in hint '{hint}'")
-                #     break
+                    matched = True
+                    break
     
     return children
+
+
+def extract_display_name(model_id: str) -> str:
+    """
+    Extract the display name from a model ID by removing the org prefix.
+    
+    Args:
+        model_id: Full model ID like "google-bert/bert-base-uncased"
+        
+    Returns:
+        Just the model name like "bert-base-uncased"
+    """
+    if not model_id:
+        return ""
+    
+    # If there's a slash, take everything after it (remove org prefix)
+    if '/' in model_id:
+        return model_id.split('/', 1)[1]
+    
+    # Otherwise return as-is
+    return model_id
 
 
 def build_lineage_graph(target_artifact: Any, all_artifacts: List[Any]) -> Dict[str, Any]:
     """
     Build the complete lineage graph for a target model.
     
-    Queries the database for parent and child relationships and constructs
-    a graph with nodes and edges according to the API specification.
+    Recursively traverses parent and child relationships to build a complete
+    lineage graph including all ancestors and descendants.
     
     Args:
         target_artifact: The target model artifact object
@@ -360,76 +431,85 @@ def build_lineage_graph(target_artifact: Any, all_artifacts: List[Any]) -> Dict[
     # Use model_id from lineage as the name, fallback to artifact.name
     target_name = target_model_id or target_artifact.name or ""
     
-    logger.info(f"Building lineage graph for artifact {target_artifact.id} ({target_name})")
-    logger.debug(f"Target lineage data: {target_lineage}")
+    logger.info(f"Building lineage graph for artifact {target_artifact.id}")
     
-    # Find parents and children
-    parents = find_parent_matches(target_lineage, all_artifacts)
-    children = find_child_matches(target_model_id, all_artifacts)
-    
-    logger.info(f"Found {len(parents)} parent(s) and {len(children)} child(ren)")
-    
-    # Determine source for target node
     target_source = determine_lineage_source(target_lineage)
     
     nodes_dict = {}
+    edges_set = set()
     
-    # Add target node
+    # Use display name (without org prefix) for the graph
+    target_display_name = extract_display_name(target_name)
+    
     nodes_dict[target_artifact.id] = {
         "artifact_id": target_artifact.id,
-        "name": target_name,
+        "name": target_display_name,
         "source": target_source
     }
     
-    # Add parent nodes
-    for parent in parents:
-        if parent.id not in nodes_dict:
-            parent_lineage = parent.ndjson.get("lineage", {}) if parent.ndjson else {}
-            parent_model_id = parent_lineage.get("model_id", "")
-            parent_name = parent_model_id or parent.name or ""
-            parent_source = determine_lineage_source(parent_lineage)
-            nodes_dict[parent.id] = {
-                "artifact_id": parent.id,
-                "name": parent_name,
-                "source": parent_source
+    artifact_map = {artifact.id: artifact for artifact in all_artifacts}
+    artifact_map[target_artifact.id] = target_artifact
+    visited = set()
+    
+    def add_artifact_to_graph(artifact):
+        """Helper to add artifact node to graph if not already present."""
+        if artifact.id not in nodes_dict:
+            lineage = artifact.ndjson.get("lineage", {}) if artifact.ndjson else {}
+            model_id = lineage.get("model_id", "")
+            full_name = model_id or artifact.name or ""
+            # Use display name (without org prefix) for the graph
+            display_name = extract_display_name(full_name)
+            source = determine_lineage_source(lineage)
+            nodes_dict[artifact.id] = {
+                "artifact_id": artifact.id,
+                "name": display_name,
+                "source": source
             }
     
-    # Add child nodes
-    for child in children:
-        if child.id not in nodes_dict:
+    def traverse_ancestors(artifact):
+        """Recursively find all ancestors (parents, grandparents, etc.)."""
+        if artifact.id in visited:
+            return
+        visited.add(artifact.id)
+        lineage = artifact.ndjson.get("lineage", {}) if artifact.ndjson else {}
+        parents = find_parent_matches(lineage, list(artifact_map.values()))
+        for parent in parents:
+            add_artifact_to_graph(parent)
+            relationship = determine_relationship_type(lineage, parent)
+            edge_tuple = (parent.id, artifact.id, relationship)
+            edges_set.add(edge_tuple)
+            traverse_ancestors(parent)
+    
+    def traverse_descendants(artifact):
+        """Recursively find all descendants (children, grandchildren, etc.)."""
+        if artifact.id in visited:
+            return
+        visited.add(artifact.id)
+        lineage = artifact.ndjson.get("lineage", {}) if artifact.ndjson else {}
+        model_id = lineage.get("model_id", "")
+        children = find_child_matches(model_id, artifact.url, artifact.name, list(artifact_map.values()))
+        for child in children:
+            add_artifact_to_graph(child)
             child_lineage = child.ndjson.get("lineage", {}) if child.ndjson else {}
-            child_model_id = child_lineage.get("model_id", "")
-            child_name = child_model_id or child.name or ""
-            child_source = determine_lineage_source(child_lineage)
-            nodes_dict[child.id] = {
-                "artifact_id": child.id,
-                "name": child_name,
-                "source": child_source
-            }
+            relationship = determine_relationship_type(child_lineage, artifact)
+            edge_tuple = (artifact.id, child.id, relationship)
+            edges_set.add(edge_tuple)
+            traverse_descendants(child)
     
-    edges = []
+    visited.clear()
+    traverse_ancestors(target_artifact)
     
-    # Parent -> Target edges
-    # Edge points from parent to target, showing parent is the base_model
-    for parent in parents:
-        # Determine relationship type from target's perspective (target is derived from parent)
-        relationship = determine_relationship_type(target_lineage, parent)
-        edges.append({
-            "from_node_artifact_id": parent.id,
-            "to_node_artifact_id": target_artifact.id,
-            "relationship": relationship
-        })
+    visited.clear()
+    traverse_descendants(target_artifact)
     
-    # Target -> Child edges
-    # Edge points from target to child, describing how child was derived from target
-    for child in children:
-        child_lineage = child.ndjson.get("lineage", {}) if child.ndjson else {}
-        relationship = determine_relationship_type(child_lineage, target_artifact)
-        edges.append({
-            "from_node_artifact_id": target_artifact.id,
-            "to_node_artifact_id": child.id,
-            "relationship": relationship  # How the child was derived from target
-        })
+    edges = [
+        {
+            "from_node_artifact_id": from_id,
+            "to_node_artifact_id": to_id,
+            "relationship": rel
+        }
+        for from_id, to_id, rel in edges_set
+    ]
     
     graph = {
         "nodes": list(nodes_dict.values()),

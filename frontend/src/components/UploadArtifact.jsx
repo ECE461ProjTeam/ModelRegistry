@@ -1,3 +1,5 @@
+// frontend/src/components/UploadArtifact.jsx
+
 import React, { useState } from "react";
 import Navbar from "../components/Navbar.jsx";
 import API_ENDPOINTS from "../config/api";
@@ -8,6 +10,7 @@ import LoadingSpinner from "../components/LoadingSpinner.jsx";
 
 export default function UploadArtifact() {
   const [url, setUrl] = useState("");
+  const [name, setName] = useState("");
   const [type, setType] = useState("model");
   const [success, setSuccess] = useState("");
   const [error, setError] = useState("");
@@ -25,13 +28,7 @@ export default function UploadArtifact() {
       return setError("Invalid URL format.");
     }
 
-    let name;
-    try {
-      const parsed = new URL(url);
-      name = parsed.pathname.split("/").filter(Boolean).pop() || type;
-    } catch {
-      name = type;
-    }
+    if (!name.trim()) return setError("Please enter a name.");
 
     try {
       setLoading(true);
@@ -46,6 +43,7 @@ export default function UploadArtifact() {
       if (res.status === 201) {
         setSuccess(`${type} uploaded successfully!`);
         setUrl("");
+        setName("");
       }
     } catch (err) {
       setError(err.response?.data?.message || "Upload failed. Please try again.");
@@ -61,8 +59,9 @@ export default function UploadArtifact() {
         <h1>Upload Artifact</h1>
 
         <div className="card">
-          <label className="label">Artifact Type</label>
+          <label className="label" htmlFor="artifact-type">Artifact Type</label>
           <select
+            id="artifact-type"
             className="input-select"
             value={type}
             onChange={(e) => setType(e.target.value)}
@@ -72,8 +71,21 @@ export default function UploadArtifact() {
             <option value="code">Code</option>
           </select>
 
-          <label className="label" style={{ marginTop: "1rem" }}>URL</label>
+          <label className="label" htmlFor="artifact-name" style={{ marginTop: "1rem" }}>
+            Artifact Name
+          </label>
           <input
+            id="artifact-name"
+            placeholder="my-model-v1"
+            value={name}
+            onChange={(e) => setName(e.target.value)}
+          />
+
+          <label className="label" htmlFor="artifact-url" style={{ marginTop: "1rem" }}>
+            URL
+          </label>
+          <input
+            id="artifact-url"
             placeholder="https://example.com/model"
             value={url}
             onChange={(e) => setUrl(e.target.value)}
@@ -82,9 +94,7 @@ export default function UploadArtifact() {
           {loading ? (
             <LoadingSpinner />
           ) : (
-            <button onClick={submit} style={{ marginTop: "1.3rem" }}>
-              Upload
-            </button>
+            <button onClick={submit} style={{ marginTop: "1.3rem" }}>Upload</button>
           )}
 
           <SuccessBanner message={success} />
@@ -94,5 +104,7 @@ export default function UploadArtifact() {
     </>
   );
 }
+
+
 
 

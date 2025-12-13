@@ -4,8 +4,9 @@
   --bg-color: #1a1a1a;
   --card-bg: #27272a;
   --border-color: #3f3f46;
-  --btn-bg: #3b82f6;
-  --btn-hover: #2563eb;
+  --btn-bg: #326ed1;        /* New accessible button blue */
+  --btn-hover: #255bb3;     /* Slightly darker hover */
+
 }
 
 body {
@@ -144,5 +145,19 @@ button:hover {
 /* Spinner animation */
 @keyframes spin {
   to { transform: rotate(360deg); }
+}
+
+.scrollable-logs:focus {
+  outline: 2px solid var(--btn-bg);
+  outline-offset: 4px;
+}
+
+
+.scrollable-logs {
+  outline: none;
+}
+.scrollable-logs:focus {
+  outline: 2px solid #3b82f6;
+  outline-offset: 4px;
 }
 
