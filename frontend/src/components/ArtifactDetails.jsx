@@ -19,27 +19,27 @@ export default function ArtifactDetails() {
   const token = localStorage.getItem("token");
 
   // Pretty print any JSON object into a readable list
-function renderJsonObject(obj) {
-  if (!obj || typeof obj !== "object") return String(obj);
+  function renderJsonObject(obj) {
+    if (!obj || typeof obj !== "object") return String(obj);
 
-  return (
-    <div style={{
-      background: "#111",
-      padding: "1rem",
-      borderRadius: "8px",
-      marginTop: "1rem",
-      whiteSpace: "pre-wrap",
-      fontFamily: "monospace",
-      color: "#0f0"
-    }}>
-      {Object.entries(obj).map(([key, value]) => (
-        <div key={key}>
-          <strong>{key}:</strong> {JSON.stringify(value, null, 2)}
-        </div>
-      ))}
-    </div>
-  );
-}
+    return (
+      <div style={{
+        background: "#111",
+        padding: "1rem",
+        borderRadius: "8px",
+        marginTop: "1rem",
+        whiteSpace: "pre-wrap",
+        fontFamily: "monospace",
+        color: "#0f0"
+      }}>
+        {Object.entries(obj).map(([key, value]) => (
+          <div key={key}>
+            <strong>{key}:</strong> {JSON.stringify(value, null, 2)}
+          </div>
+        ))}
+      </div>
+    );
+  }
 
 
   const fetchArtifact = async () => {
