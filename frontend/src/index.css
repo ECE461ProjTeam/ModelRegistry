@@ -151,3 +151,13 @@ button:hover {
   outline: 2px solid var(--btn-bg);
   outline-offset: 4px;
 }
+
+
+.scrollable-logs {
+  outline: none;
+}
+.scrollable-logs:focus {
+  outline: 2px solid #3b82f6;
+  outline-offset: 4px;
+}
+

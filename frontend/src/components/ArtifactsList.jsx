@@ -16,13 +16,8 @@ export default function ArtifactsList() {
   const [loading, setLoading] = useState(false);
 
   const selectedTypes =
-    typeFilter === "all"
-      ? ["model", "dataset", "code"]
-      : [typeFilter];
+    typeFilter === "all" ? ["model", "dataset", "code"] : [typeFilter];
 
-  // -----------------------------------------------------
-  // 🔎 SEARCH / FILTER / REGEX LOGIC
-  // -----------------------------------------------------
   const fetchArtifacts = async () => {
     const token = localStorage.getItem("token");
     setLoading(true);
@@ -32,11 +27,8 @@ export default function ArtifactsList() {
       trimmed.startsWith("/") && trimmed.endsWith("/") && trimmed.length > 2;
 
     try {
-      // ----------------------------------------------
-      // 🔥 REGEX SEARCH — /pattern/
-      // ----------------------------------------------
       if (isRegex) {
-        const pattern = trimmed.slice(1, -1); // Remove "/" from /pattern/
+        const pattern = trimmed.slice(1, -1);
 
         const res = await axios.post(
           API_ENDPOINTS.ARTIFACT_BY_REGEX,
@@ -48,14 +40,9 @@ export default function ArtifactsList() {
         return;
       }
 
-      // ----------------------------------------------
-      // 🔍 NORMAL SEARCH (name or id)
-      // ----------------------------------------------
-      const query = trimmed === "" ? "*" : trimmed;
-
       const body = [
         {
-          name: query,
+          name: trimmed === "" ? "*" : trimmed,
           types: selectedTypes,
         },
       ];
@@ -77,9 +64,6 @@ export default function ArtifactsList() {
     fetchArtifacts();
   }, []);
 
-  // -----------------------------------------------------
-  // 📌 ON CLICK → GO TO DETAIL PAGE
-  // -----------------------------------------------------
   const openArtifact = (a) => {
     navigate(`/artifacts/${a.type}/${a.id}`);
   };
@@ -91,16 +75,18 @@ export default function ArtifactsList() {
         <h1>Artifacts</h1>
 
         <div className="card">
-          {/* Search Box */}
+          <label className="label" htmlFor="artifact-search">Search</label>
           <input
+            id="artifact-search"
             value={search}
             onChange={(e) => setSearch(e.target.value)}
             placeholder="Search by name, ID, or /regex/"
             style={{ marginBottom: "1rem", width: "100%" }}
           />
 
-          {/* Type Filter */}
+          <label className="label" htmlFor="artifact-type-filter">Type Filter</label>
           <select
+            id="artifact-type-filter"
             value={typeFilter}
             onChange={(e) => setTypeFilter(e.target.value)}
             style={{ marginBottom: "1rem", width: "100%" }}
@@ -115,7 +101,6 @@ export default function ArtifactsList() {
             Refresh
           </button>
 
-          {/* RESULTS */}
           <div style={{ marginTop: "1.5rem" }}>
             {loading || list === null ? (
               <LoadingSpinner />
@@ -139,11 +124,14 @@ export default function ArtifactsList() {
                   {list.map((a) => (
                     <tr
                       key={a.id}
+                      role="button"
+                      tabIndex={0}
+                      onClick={() => openArtifact(a)}
+                      onKeyDown={(e) => e.key === "Enter" && openArtifact(a)}
                       style={{
                         borderBottom: "1px solid #333",
                         cursor: "pointer",
                       }}
-                      onClick={() => openArtifact(a)}
                     >
                       <td>{a.name}</td>
                       <td>{a.type}</td>
@@ -155,13 +143,12 @@ export default function ArtifactsList() {
             )}
           </div>
 
-          {/* Regex hint */}
           <p style={{ marginTop: "1rem", opacity: 0.7, fontSize: "0.9rem" }}>
-            Tip: use <code>/regex/</code> format for regex search.
-            Example: <code>/bert.*/</code>
+            Tip: use <code>/regex/</code> format for regex search. Example: <code>/bert.*/</code>
           </p>
         </div>
       </div>
     </>
   );
 }
+
