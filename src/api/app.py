@@ -224,7 +224,6 @@ def run_js_program(jsprog, artifact_name, uploader_name, user_name, download_url
                     "--memory=64m",
                     "--cpus=0.5",
                     "--pids-limit=64",
-                    "--read-only",
                     "-v", f"{workdir_str}:/sandbox:ro",
                     "js-sandbox-image",
                     "node", "/sandbox/script.js", artifact_name, uploader_name, user_name, download_url
