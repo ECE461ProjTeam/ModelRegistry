@@ -504,8 +504,8 @@ def system_health_components():
         return jsonify({"message": "windowMinutes must be an integer."}), 400
     
     # Ensure window_minutes is between 5 and 1440
-    if window_minutes <= 5:
-        return jsonify({"message": "Window Minutes must be a positive integer greater than 5."}), 400
+    if window_minutes < 5:
+        return jsonify({"message": "Window Minutes must be a positive integer greater than or equal to 5."}), 400
     elif window_minutes > 1440:
         return jsonify({"message": "Window Minutes must not exceed 1440 (24 hours)."}), 400
 
