@@ -157,7 +157,7 @@ export default function ArtifactsList() {
 
           {/* Regex hint */}
           <p style={{ marginTop: "1rem", opacity: 0.7, fontSize: "0.9rem" }}>
-            Tip: use <code>/regex/</code> format for regex search.  
+            Tip: use <code>/regex/</code> format for regex search.
             Example: <code>/bert.*/</code>
           </p>
         </div>
