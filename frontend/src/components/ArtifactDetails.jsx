@@ -199,12 +199,12 @@ export default function ArtifactDetails() {
             </button>
 
             {success && (
-  <div style={{ marginTop: "1rem" }}>
-    <SuccessBanner message={typeof success === "string" ? success : ""} />
-    {/* If success is JSON, show pretty box */}
-    {typeof success === "object" && renderJsonObject(success)}
-  </div>
-)}
+              <div style={{ marginTop: "1rem" }}>
+                <SuccessBanner message={typeof success === "string" ? success : ""} />
+                {/* If success is JSON, show pretty box */}
+                {typeof success === "object" && renderJsonObject(success)}
+              </div>
+            )}
 
             <ErrorBanner message={error} />
           </div>
