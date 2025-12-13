@@ -223,8 +223,9 @@ def run_js_program(jsprog, artifact_name, uploader_name, user_name, download_url
                     "--network=none",
                     "--memory=64m",
                     "--cpus=0.5",
-                    "--user", "root",
-                    "-v", f"{workdir_str}:/sandbox",
+                    "--pids-limit=64",
+                    "--read-only",
+                    "-v", f"{workdir_str}:/sandbox:ro",
                     "js-sandbox-image",
                     "node", "/sandbox/script.js", artifact_name, uploader_name, user_name, download_url
                 ],
@@ -388,7 +389,7 @@ def ArtifactCreate(artifact_type):
         js_program = None
         if sensitive:
             js_program = data.get("js_program", None)
-            if js_program is None:
+            if js_program is None or js_program.strip() == "":
                 return jsonify({'error': 'Sensitive artifact must include a js_program field.'}), 400
             
     except Exception as e:
