@@ -390,6 +390,27 @@ def find_child_matches(target_model_id: str, target_url: str, target_name: str,
     return children
 
 
+def extract_display_name(model_id: str) -> str:
+    """
+    Extract the display name from a model ID by removing the org prefix.
+    
+    Args:
+        model_id: Full model ID like "google-bert/bert-base-uncased"
+        
+    Returns:
+        Just the model name like "bert-base-uncased"
+    """
+    if not model_id:
+        return ""
+    
+    # If there's a slash, take everything after it (remove org prefix)
+    if '/' in model_id:
+        return model_id.split('/', 1)[1]
+    
+    # Otherwise return as-is
+    return model_id
+
+
 def build_lineage_graph(target_artifact: Any, all_artifacts: List[Any]) -> Dict[str, Any]:
     """
     Build the complete lineage graph for a target model.
@@ -417,9 +438,12 @@ def build_lineage_graph(target_artifact: Any, all_artifacts: List[Any]) -> Dict[
     nodes_dict = {}
     edges_set = set()
     
+    # Use display name (without org prefix) for the graph
+    target_display_name = extract_display_name(target_name)
+    
     nodes_dict[target_artifact.id] = {
         "artifact_id": target_artifact.id,
-        "name": target_name,
+        "name": target_display_name,
         "source": target_source
     }
     
@@ -432,11 +456,13 @@ def build_lineage_graph(target_artifact: Any, all_artifacts: List[Any]) -> Dict[
         if artifact.id not in nodes_dict:
             lineage = artifact.ndjson.get("lineage", {}) if artifact.ndjson else {}
             model_id = lineage.get("model_id", "")
-            name = model_id or artifact.name or ""
+            full_name = model_id or artifact.name or ""
+            # Use display name (without org prefix) for the graph
+            display_name = extract_display_name(full_name)
             source = determine_lineage_source(lineage)
             nodes_dict[artifact.id] = {
                 "artifact_id": artifact.id,
-                "name": name,
+                "name": display_name,
                 "source": source
             }
     
