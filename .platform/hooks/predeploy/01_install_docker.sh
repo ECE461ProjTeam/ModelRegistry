@@ -4,5 +4,5 @@ if ! command -v docker &> /dev/null
 then
     amazon-linux-extras install docker -y
     systemctl start docker
-    usermod -a -G docker ec2-user
+    sudo usermod -a -G docker ec2-user
 fi
