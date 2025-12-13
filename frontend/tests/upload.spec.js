@@ -10,7 +10,7 @@ test('upload model form submits', async ({ page }) => {
   await expect(urlInput).toBeVisible();
 
   // Fill the URL with a valid HF model (simple one)
-  await urlInput.fill("https://huggingface.co/google/bert-base-uncased");
+  await urlInput.fill("https://huggingface.co/google-bert/bert-base-uncased");
 
   // Ensure select exists and select "model"
   const typeSelect = page.getByRole("combobox");
