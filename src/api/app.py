@@ -197,19 +197,30 @@ def RegistryReset():
     return jsonify({'message': 'Registry is reset.'}), 200
 
 def ensure_sandbox_image():
-    result = subprocess.run(
+    check = subprocess.run(
         ["docker", "images", "-q", "js-sandbox-image"],
-        capture_output=True, text=True
+        capture_output=True,
+        text=True
     )
-    if not result.stdout.strip():
-        # image missing → build it
-        subprocess.run(
+
+    if check.returncode != 0:
+        raise RuntimeError(check.stderr)
+
+    if not check.stdout.strip():
+        build = subprocess.run(
             ["docker", "build", "-t", "js-sandbox-image", "-f", "Dockerfile.js-sandbox", "."],
-            check=True
+            capture_output=True,
+            text=True
         )
 
+        if build.returncode != 0:
+            raise RuntimeError(
+                f"Docker build failed:\n{build.stderr}"
+            )
+
 def run_js_program(jsprog, artifact_name, uploader_name, user_name, download_url):
-    # ensure_sandbox_image()
+    if app.config['ACTIVE_CONFIG'] == TestConfig.__name__:
+        ensure_sandbox_image()
 
     with tempfile.TemporaryDirectory(dir=Path.cwd()) as tmpdir:
         workdir = Path(tmpdir)
