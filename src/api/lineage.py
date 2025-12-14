@@ -411,6 +411,102 @@ def extract_display_name(model_id: str) -> str:
     return model_id
 
 
+def compute_tree_score_for_model(lineage_data: Dict[str, Any], 
+                                 artifact_id: int, 
+                                 db_session: Any) -> Dict[str, Any]:
+    """
+    Compute tree_score for a model by averaging net_scores of all models in its lineage tree.
+    
+    This function builds the complete lineage graph (parents and children) and computes
+    the average net_score across all related models.
+    
+    Args:
+        lineage_data: The lineage data from the model's ndjson field
+        artifact_id: The ID of the model being rated
+        db_session: SQLAlchemy database session
+        
+    Returns:
+        Dict with keys:
+            - tree_score: The computed average (float)
+            - model_count: Number of models included in the average (int)
+            - details: Additional information about the computation (dict)
+    """
+    from .models import Artifact
+    
+    logger.info(f"Computing tree_score for artifact {artifact_id}")
+    
+    # Get the target artifact
+    target_artifact = Artifact.query.filter_by(id=artifact_id, type='model').first()
+    if not target_artifact:
+        logger.warning(f"Artifact {artifact_id} not found")
+        return {
+            "tree_score": 0.0,
+            "model_count": 0,
+            "details": {"error": "artifact_not_found"}
+        }
+    
+    # Get all other model artifacts from database
+    all_artifacts = Artifact.query.filter(
+        Artifact.type == 'model',
+        Artifact.id != artifact_id
+    ).all()
+    
+    # Build the lineage graph
+    lineage_graph = build_lineage_graph(target_artifact, all_artifacts)
+    
+    # Extract all artifact IDs from the graph nodes
+    artifact_ids = [node["artifact_id"] for node in lineage_graph["nodes"]]
+    
+    logger.info(f"Found {len(artifact_ids)} models in lineage tree for artifact {artifact_id}")
+    
+    # Collect net_scores from all artifacts in the tree
+    net_scores = []
+    # Fetch all artifacts in one query to avoid N+1 problem
+    artifacts = Artifact.query.filter(Artifact.id.in_(artifact_ids)).all()
+    artifact_map = {artifact.id: artifact for artifact in artifacts}
+    for aid in artifact_ids:
+        artifact = artifact_map.get(aid)
+        if artifact and artifact.ndjson:
+            net_score = artifact.ndjson.get("net_score")
+            if net_score is not None:
+                net_scores.append(net_score)
+                logger.debug(f"Artifact {aid}: net_score = {net_score}")
+    
+    if not net_scores:
+        logger.warning(f"No net_scores found in lineage tree for artifact {artifact_id}")
+        # Fallback to the artifact's own net_score if available
+        if target_artifact.ndjson:
+            own_net_score = target_artifact.ndjson.get("net_score", 0.0)
+            return {
+                "tree_score": own_net_score,
+                "model_count": 1,
+                "details": {
+                    "warning": "no_related_net_scores",
+                    "fallback": "own_net_score"
+                }
+            }
+        return {
+            "tree_score": 0.0,
+            "model_count": 0,
+            "details": {"error": "no_net_scores_available"}
+        }
+    
+    # Compute the average
+    tree_score = sum(net_scores) / len(net_scores)
+    
+    logger.info(f"Computed tree_score {tree_score:.3f} from {len(net_scores)} models")
+    
+    return {
+        "tree_score": tree_score,
+        "model_count": len(net_scores),
+        "details": {
+            "artifact_ids": artifact_ids,
+            "net_scores": net_scores,
+            "average": tree_score
+        }
+    }
+
+
 def build_lineage_graph(target_artifact: Any, all_artifacts: List[Any]) -> Dict[str, Any]:
     """
     Build the complete lineage graph for a target model.
