@@ -18,6 +18,7 @@ from datetime import datetime, timezone
 from src.logger import get_logger
 from ..url_parsers.url_type_handler import handle_url
 from ..cli.validate import validate_ndjson
+from sqlalchemy.orm.attributes import flag_modified
 import requests
 from src.metrics.data_fetcher.llm import get_genai_dataset_code_links
 from src.metrics.data_fetcher.huggingface import get_huggingface_file
@@ -66,10 +67,10 @@ class Artifact(db.Model):
                 self.ingestible = False
                 return
         
-        try:
-            self.send_to_bucket()
-        except Exception as e:
-            logger.error(f"Error sending artifact {self.id} to bucket: {e}")
+        # try:
+        #     self.send_to_bucket()
+        # except Exception as e:
+        #     logger.error(f"Error sending artifact {self.id} to bucket: {e}")
                 
         
     @staticmethod
@@ -77,28 +78,128 @@ class Artifact(db.Model):
         return int(uuid.uuid4().int % 1e11)
     
     def rate(self) -> bool:
-        if self.ndjson != {}:
-            logger.info("Model already rated, skipping re-rating.")
-            return True
+        """Rate the model artifact and compute tree_score.
         
-        readme_path = get_huggingface_file(self.url)
-        with open(readme_path, 'r') as f:
-            self.readme = f.read()
-        # logger.debug(self.readme)
-        self.extract_code_dataset_urls_from_llm()
+        Two scenarios:
+        1. Initial rating (ndjson is empty): Compute all metrics, port net_score to tree_score
+        2. Re-rating (ndjson is populated): Recompute tree_score from lineage, recalculate net_score
+        """
+        is_initial_rating = (self.ndjson == {} or self.ndjson is None)
         
-        logger.info(f"Rating model artifact {self.id} with name {self.name}")
-        try:
-            raw_ndjson = handle_url({0: [self.code_url, self.dataset_url, self.url]})[0]
-        except Exception as e:
-            logger.error(f"Error handling URL for rating: {e}")
-            return False
-        if(validate_ndjson(raw_ndjson)):
-            self.ndjson = raw_ndjson
-            self.ndjson.update({'name': self.name, 'category': self.type})
+        if is_initial_rating:
+            logger.info(f"Initial rating for model artifact {self.id} with name {self.name}")
+            
+            # Get README for LLM extraction
+            readme_path = get_huggingface_file(self.url)
+            with open(readme_path, 'r') as f:
+                self.readme = f.read()
+            
+            # Extract code and dataset URLs
+            self.extract_code_dataset_urls_from_llm()
+            
+            # Compute all metrics (including initial tree_score via metrics)
+            try:
+                raw_ndjson = handle_url({0: [self.code_url, self.dataset_url, self.url]})[0]
+            except Exception as e:
+                logger.error(f"Error handling URL for rating: {e}")
+                return False
+            
+            if validate_ndjson(raw_ndjson):
+                self.ndjson = raw_ndjson
+                self.ndjson.update({'name': self.name, 'category': self.type})
+                
+                # For initial rating, tree_score is already set by tree_score.py metric
+                # It uses net_score as the initial tree_score value
+                logger.info(f"Initial rating complete. tree_score: {self.ndjson.get('tree_score', 'N/A')}, net_score: {self.ndjson.get('net_score', 'N/A')}")
+            else:
+                logger.error(f"Invalid ndjson generated for artifact {self.id}")
+                return False
+                
+        else:
+            # Re-rating scenario: recompute tree_score from lineage
+            logger.info(f"Re-rating model artifact {self.id} with name {self.name}")
+            
+            # Check if lineage data exists
+            lineage_data = self.ndjson.get('lineage', {})
+            if not lineage_data:
+                logger.warning(f"No lineage data found for artifact {self.id}, cannot recompute tree_score")
+                return True  # Return success but don't update tree_score
+            
+            # Compute tree_score from lineage
+            try:
+                from src.api.lineage import compute_tree_score_for_model
+                
+                result = compute_tree_score_for_model(lineage_data, self.id, db.session)
+                new_tree_score = result["tree_score"]
+                
+                logger.info(f"Recomputed tree_score: {new_tree_score:.3f} from {result['model_count']} related models")
+                
+                # Update tree_score in ndjson
+                old_tree_score = self.ndjson.get('tree_score', 0.0)
+                self.ndjson['tree_score'] = new_tree_score
+                
+                # Recalculate net_score since tree_score changed
+                old_net_score = self.ndjson.get('net_score', 0.0)
+                self.recalculate_net_score()
+                new_net_score = self.ndjson.get('net_score', 0.0)
+                
+                logger.info(f"Updated scores - tree_score: {old_tree_score:.3f} -> {new_tree_score:.3f}, net_score: {old_net_score:.3f} -> {new_net_score:.3f}")
+                
+                # CRITICAL: Mark ndjson as modified so SQLAlchemy knows to UPDATE it
+                # Without this, in-place dict modifications aren't detected
+                flag_modified(self, 'ndjson')
+                
+            except Exception as e:
+                logger.error(f"Error recomputing tree_score for artifact {self.id}: {e}")
+                return False
         
         logger.info(f"Completed rating for model artifact {self.id} with name {self.name}")
         return True
+    
+    def recalculate_net_score(self):
+        """Recalculate net_score based on current metric values in ndjson.
+        
+        net_score is typically calculated as a weighted average of other metrics.
+        This method recomputes it after tree_score has been updated.
+        """
+        if not self.ndjson:
+            logger.warning(f"Cannot recalculate net_score for artifact {self.id}: ndjson is empty")
+            return
+        
+        # Define which metrics contribute to net_score
+        # Excluding: name, category, lineage, *_latency fields, net_score itself
+        metric_keys = []
+        for key in self.ndjson:
+            if (not key.endswith("_latency") and 
+                key not in ["name", "category", "lineage", "net_score"]):
+                metric_keys.append(key)
+        
+        if not metric_keys:
+            logger.warning(f"No metrics found to calculate net_score for artifact {self.id}")
+            return
+        
+        # Calculate net_score as average of all metric scores
+        total = 0.0
+        count = 0
+        
+        for key in metric_keys:
+            value = self.ndjson[key]
+            if isinstance(value, dict):
+                # If metric is a dict, average its sub-values
+                sub_values = [v for v in value.values() if isinstance(v, (int, float))]
+                if sub_values:
+                    total += sum(sub_values) / len(sub_values)
+                    count += 1
+            elif isinstance(value, (int, float)):
+                total += value
+                count += 1
+        
+        if count > 0:
+            new_net_score = total / count
+            self.ndjson['net_score'] = new_net_score
+            logger.debug(f"Recalculated net_score for artifact {self.id}: {new_net_score:.3f} (average of {count} metrics)")
+        else:
+            logger.warning(f"No valid metric values found to calculate net_score for artifact {self.id}")
     
     def check_ingestible(self) -> bool:
         if self.ndjson == {}:
