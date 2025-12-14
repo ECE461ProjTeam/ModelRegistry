@@ -209,7 +209,7 @@ def ensure_sandbox_image():
         )
 
 def run_js_program(jsprog, artifact_name, uploader_name, user_name, download_url):
-    ensure_sandbox_image()
+    # ensure_sandbox_image()
 
     with tempfile.TemporaryDirectory(dir=Path.cwd()) as tmpdir:
         workdir = Path(tmpdir)
