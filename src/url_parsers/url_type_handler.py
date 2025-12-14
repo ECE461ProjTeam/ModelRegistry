@@ -224,6 +224,8 @@ def handle_url(models: Dict[str, List[Optional[str]]]) -> Dict[str, dict]:
         bus_factor_seconds = bus_factor_metric.seconds * 1000 if bus_factor_metric else None
         reproducibility_metric = results.get("reproducibility")
         reproducibility_seconds = reproducibility_metric.seconds * 1000 if reproducibility_metric else None
+        tree_score_metric = results.get("tree_score")
+        tree_score_seconds = tree_score_metric.seconds * 1000 if tree_score_metric else None
 
         ndjson_args = {
             # summary
@@ -254,7 +256,7 @@ def handle_url(models: Dict[str, List[Optional[str]]]) -> Dict[str, dict]:
             "reproducibility": get_metric("reproducibility"),
             "reproducibility_latency": reproducibility_seconds,
             "tree_score": get_metric("tree_score"),
-            "tree_score_latency": get_latency("tree_score"),
+            "tree_score_latency": tree_score_seconds,
             "lineage": context.get("lineage"),  # Pass lineage from comprehensive data
         }
 
