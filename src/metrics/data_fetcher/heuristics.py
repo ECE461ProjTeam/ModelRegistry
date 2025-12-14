@@ -54,8 +54,8 @@ def compute_size_scores(total_size_bytes: int) -> Dict[str, float]:
             "aws_server": 0.01}
     mb = 1024 * 1024
     gb = 1024 * mb
-    rpi = max(0.01, min(1.0, 1.0 - (total_size_bytes / (100 * mb))))
-    jetson = max(0.01, min(1.0, 1.0 - (total_size_bytes / (1 * gb))))
+    rpi = max(0.01, min(1.0, 1.0 - (total_size_bytes / (10 * gb))))
+    jetson = max(0.01, min(1.0, 1.0 - (total_size_bytes / (10 * gb))))
     desktop = max(0.01, min(1.0, 1.0 - (total_size_bytes / (10 * gb))))
     aws = max(0.01, min(1.0, 1.0 - (total_size_bytes / (100 * gb))))
     return {
