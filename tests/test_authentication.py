@@ -192,6 +192,75 @@ class TestAuthenticationEndpoints(unittest.TestCase):
         with self.app.app_context():
             u2 = User.query.filter_by(name='otheruser').first()
             self.assertIsNone(u2)
+    
+    def test_delete_profile_forbidden(self):
+        """A non-admin user may not delete another user's profile."""
+        # create a user directly in the DB to be deleted
+        with self.app.app_context():
+            u = User(name='victimuser', is_admin=False)
+            u.set_password('victimpw')
+            db.session.add(u)
+            db.session.commit()
+            u2 = User(name='attackeruser', is_admin=False)
+            u2.set_password('attackerpw')
+            db.session.add(u2)
+            db.session.commit()
+
+        # authenticate as attackeruser to get a token
+        auth_payload = {"user": {"name": 'attackeruser'}, "secret": {"password": 'attackerpw'}}
+        auth_resp = self.client.put('/authenticate', json=auth_payload)
+        self.assertEqual(auth_resp.status_code, 200)
+        token = auth_resp.get_json()
+        headers = {"X-Authorization": f"{token}"}
+        payload = {"user": {"name": 'victimuser'}}
+
+        resp = self.client.delete('/profile', headers=headers, json=payload)
+        self.assertEqual(resp.status_code, 403)
+        data = resp.get_json()
+        self.assertIn('error', data)
+
+        # verify victimuser still exists
+        with self.app.app_context():
+            u3 = User.query.filter_by(name='victimuser').first()
+            self.assertIsNotNone(u3)
+    
+    def test_list_users_as_admin(self):
+        """An admin can list all users via GET /users."""
+        # admin token (get via authenticate endpoint)
+        auth_payload = {
+            "user": {"name": os.environ.get("DEFAULT_USER")},
+            "secret": {"password": os.environ.get("DEFAULT_PASSWORD")}
+        }
+        auth_resp = self.client.put('/authenticate', json=auth_payload)
+        self.assertEqual(auth_resp.status_code, 200)
+        token = auth_resp.get_json()
+        headers = {"X-Authorization": f"{token}"}
+
+        resp = self.client.get('/users', headers=headers)
+        self.assertEqual(resp.status_code, 200)
+        data = resp.get_json()
+        self.assertIn('users', data)
+        self.assertIsInstance(data['users'], list)
+
+    def test_list_users_forbidden_non_admin(self):
+        """A non-admin user may not list all users via GET /users."""
+        # create the non-admin user in the DB and authenticate to get a token
+        with self.app.app_context():
+            u = User(name='someuser2', is_admin=False)
+            u.set_password('pw2')
+            db.session.add(u)
+            db.session.commit()
+
+        auth_payload = {"user": {"name": 'someuser2'}, "secret": {"password": 'pw2'}}
+        auth_resp = self.client.put('/authenticate', json=auth_payload)
+        self.assertEqual(auth_resp.status_code, 200)
+        token = auth_resp.get_json()
+        headers = {"X-Authorization": f"{token}"}
+
+        resp = self.client.get('/users', headers=headers)
+        self.assertEqual(resp.status_code, 401)
+        data = resp.get_json()
+        self.assertIn('error', data)
 
 class TestPermissions(unittest.TestCase):
     @classmethod
