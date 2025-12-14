@@ -12,6 +12,9 @@ export default function UploadArtifact() {
   const [url, setUrl] = useState("");
   const [name, setName] = useState("");
   const [type, setType] = useState("model");
+  const [sensitive, setSensitive] = useState(false);
+  const [jsProgram, setJsProgram] = useState("");
+
   const [success, setSuccess] = useState("");
   const [error, setError] = useState("");
   const [loading, setLoading] = useState(false);
@@ -21,7 +24,6 @@ export default function UploadArtifact() {
     setError("");
 
     if (!url.trim()) return setError("Please enter a valid URL.");
-
     try {
       new URL(url);
     } catch {
@@ -29,6 +31,8 @@ export default function UploadArtifact() {
     }
 
     if (!name.trim()) return setError("Please enter a name.");
+    if (sensitive && (!jsProgram || !jsProgram.trim()))
+      return setError("Sensitive models require a JS program.");
 
     try {
       setLoading(true);
@@ -36,14 +40,23 @@ export default function UploadArtifact() {
 
       const res = await axios.post(
         API_ENDPOINTS.ARTIFACT_CREATE(type),
-        { url, name },
-        { headers: { "X-Authorization": token } }
+        {
+          url,
+          name,
+          sensitive,
+          js_program: sensitive ? jsProgram : null,
+        },
+        {
+          headers: { "X-Authorization": token },
+        }
       );
 
       if (res.status === 201) {
         setSuccess(`${type} uploaded successfully!`);
         setUrl("");
         setName("");
+        setSensitive(false);
+        setJsProgram("");
       }
     } catch (err) {
       setError(err.response?.data?.message || "Upload failed. Please try again.");
@@ -59,7 +72,10 @@ export default function UploadArtifact() {
         <h1>Upload Artifact</h1>
 
         <div className="card">
-          <label className="label" htmlFor="artifact-type">Artifact Type</label>
+          {/* Artifact type */}
+          <label className="label" htmlFor="artifact-type">
+            Artifact Type
+          </label>
           <select
             id="artifact-type"
             className="input-select"
@@ -71,30 +87,70 @@ export default function UploadArtifact() {
             <option value="code">Code</option>
           </select>
 
-          <label className="label" htmlFor="artifact-name" style={{ marginTop: "1rem" }}>
+          {/* Name */}
+          <label className="label" style={{ marginTop: "1rem" }}>
             Artifact Name
           </label>
           <input
-            id="artifact-name"
             placeholder="my-model-v1"
             value={name}
             onChange={(e) => setName(e.target.value)}
           />
 
-          <label className="label" htmlFor="artifact-url" style={{ marginTop: "1rem" }}>
+          {/* URL */}
+          <label className="label" style={{ marginTop: "1rem" }}>
             URL
           </label>
           <input
-            id="artifact-url"
             placeholder="https://example.com/model"
             value={url}
             onChange={(e) => setUrl(e.target.value)}
           />
 
+          {/* Sensitive toggle */}
+          <label className="label" style={{ marginTop: "1rem" }}>
+            Sensitive Model?
+          </label>
+          <select
+            className="input-select"
+            value={sensitive ? "true" : "false"}
+            onChange={(e) => setSensitive(e.target.value === "true")}
+          >
+            <option value="false">No</option>
+            <option value="true">Yes (requires JS program)</option>
+          </select>
+
+          {/* JS program box */}
+          {sensitive && (
+            <>
+              <label className="label" style={{ marginTop: "1rem" }}>
+                JS Program
+              </label>
+              <textarea
+                value={jsProgram}
+                onChange={(e) => setJsProgram(e.target.value)}
+                placeholder={`console.log("OK");\nprocess.exit(0);`}
+                style={{
+                  width: "100%",
+                  height: "160px",
+                  background: "#111",
+                  color: "#0f0",
+                  fontFamily: "monospace",
+                  padding: "1rem",
+                  borderRadius: "8px",
+                  marginTop: "0.5rem",
+                }}
+              />
+            </>
+          )}
+
+          {/* upload button */}
           {loading ? (
             <LoadingSpinner />
           ) : (
-            <button onClick={submit} style={{ marginTop: "1.3rem" }}>Upload</button>
+            <button onClick={submit} style={{ marginTop: "1.3rem" }}>
+              Upload
+            </button>
           )}
 
           <SuccessBanner message={success} />
@@ -104,6 +160,7 @@ export default function UploadArtifact() {
     </>
   );
 }
+
 
 
 
