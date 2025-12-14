@@ -41,14 +41,32 @@ jobs:
         working-directory: frontend
         run: npx playwright install --with-deps
 
-      # CRITICAL: Pass env vars to web server + tests
+      # Start backend API server in background
+      - name: Start backend API
+        env:
+          DEFAULT_USER: ${{ secrets.DEFAULT_USER }}
+          DEFAULT_PASSWORD: ${{ secrets.DEFAULT_PASSWORD }}
+          BUCKET_NAME: ${{ secrets.BUCKET_NAME }}
+          AWS_ACCESS_KEY_ID: ${{ secrets.AWS_ACCESS_KEY_ID }}
+          AWS_SECRET_ACCESS_KEY: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+          LOG_LEVEL: 2
+          AWS_CONFIG_FILE: .aws/config
+          PORT: 5000
+          DEBUG: "False"
+        run: |
+          ./run api &
+          echo "Waiting for API to start..."
+          sleep 20
+
+      # Pass env vars to web server + tests
       - name: Run Playwright tests
         working-directory: frontend
         env:
           DEFAULT_USER: ${{ secrets.DEFAULT_USER }}
           DEFAULT_PASSWORD: ${{ secrets.DEFAULT_PASSWORD }}
-          VITE_API_URL: "http://localhost:5000"   # If needed for your fetch calls
+          VITE_API_URL: "http://localhost:5000"
         run: npx playwright test --reporter=list
+
 
  
 
