@@ -44,19 +44,42 @@ class TreeScoreMetric:
         # Check if this is initial rating or re-rating
         artifact_id = context.get("artifact_id", 0)
         
+        # If initial rating, artifact is not in DB yet, so artifact ID is 0, else it is a rerate
         if artifact_id == 0:
-            # Initial rating - use net_score as tree_score
-            # This ensures models pass the >= 0.5 threshold during ingestion
-            net_score = context.get("net_score", 0.75)
-            logger.info(f"Initial rating: using net_score {net_score} as tree_score")
+            # Initial rating - compute as average of other available metrics
+            # This avoids using a placeholder and makes tree_score ≈ net_score from start
+            logger.info(f"Initial rating: computing tree_score as average of other metrics")
+            
+            # Note: net_score isn't available yet since tree_score is computed first
+            # So we compute directly from the other metric values in context
+            metric_keys = [
+                "ramp_up_time", "bus_factor", "performance_claims", "license",
+                "size", "availability", "dataset_quality", "code_quality",
+                "reviewedness", "reproducibility"
+            ]
+            
+            metric_values = []
+            for key in metric_keys:
+                value = context.get(key)
+                if value is not None and isinstance(value, (int, float)):
+                    metric_values.append(value)
+            
+            if not metric_values:
+                # Fallback if no metrics available yet (shouldn't happen)
+                logger.warning("No metric values available for tree_score, using 0.75")
+                value = 0.75
+            else:
+                value = sum(metric_values) / len(metric_values)
+                logger.info(f"Computed tree_score {value:.3f} from {len(metric_values)} metrics")
+            
             return MetricResult(
                 id=self.id,
-                value=net_score,
-                binary=1 if net_score >= 0.5 else 0,
+                value=value,
+                binary=1 if value >= 0.5 else 0,
                 details={
                     "initial_rating": True,
-                    "source": "net_score",
-                    "note": "Tree score will be computed from lineage on first /rate request"
+                    "source": "average_of_metrics",
+                    "metric_count": len(metric_values)
                 },
                 seconds=time.time() - start
             )
