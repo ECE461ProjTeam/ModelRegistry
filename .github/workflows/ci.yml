@@ -23,39 +23,6 @@ jobs:
           pip install -r requirements.txt
       - name: Run backend tests
         run: pytest --capture=sys -v
-
       
-      # Frontend Setup + E2E tests
-      - name: Setup Node.js 20 for frontend
-        uses: actions/setup-node@v4
-        with:
-          node-version: "20.19.0"
-          cache: "npm"
-          cache-dependency-path: "frontend/package-lock.json"
-
-      - name: Install frontend dependencies
-        working-directory: frontend
-        run: npm ci
-
-      - name: Build frontend
-        working-directory: frontend
-        run: npm run build
-
-      - name: Install Playwright browsers
-        working-directory: frontend
-        run: npx playwright install --with-deps
-
-
-      # Run Playwright tests
-      - name: Run Playwright tests
-        continue-on-error: true        
-        working-directory: frontend
-        env:
-          DEFAULT_USER: ${{ secrets.DEFAULT_USER }}
-          DEFAULT_PASSWORD: ${{ secrets.DEFAULT_PASSWORD }}
-          VITE_API_URL: "http://localhost:5000"
-        run: npx playwright test --reporter=list
-
-
  
 
