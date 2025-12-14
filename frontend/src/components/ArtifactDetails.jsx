@@ -1,3 +1,4 @@
+// frontend/src/components/ArtifactDetails.jsx
 import React, { useEffect, useState } from "react";
 import { useParams } from "react-router-dom";
 import Navbar from "./Navbar.jsx";
@@ -18,20 +19,22 @@ export default function ArtifactDetails() {
 
   const token = localStorage.getItem("token");
 
-  // Pretty print any JSON object into a readable list
+  // Pretty-print JSON
   function renderJsonObject(obj) {
     if (!obj || typeof obj !== "object") return String(obj);
 
     return (
-      <div style={{
-        background: "#111",
-        padding: "1rem",
-        borderRadius: "8px",
-        marginTop: "1rem",
-        whiteSpace: "pre-wrap",
-        fontFamily: "monospace",
-        color: "#0f0"
-      }}>
+      <div
+        style={{
+          background: "#111",
+          padding: "1rem",
+          borderRadius: "8px",
+          marginTop: "1rem",
+          whiteSpace: "pre-wrap",
+          fontFamily: "monospace",
+          color: "#0f0",
+        }}
+      >
         {Object.entries(obj).map(([key, value]) => (
           <div key={key}>
             <strong>{key}:</strong> {JSON.stringify(value, null, 2)}
@@ -41,7 +44,6 @@ export default function ArtifactDetails() {
     );
   }
 
-
   const fetchArtifact = async () => {
     try {
       const res = await axios.get(
@@ -49,9 +51,23 @@ export default function ArtifactDetails() {
         { headers: { "X-Authorization": token } }
       );
 
-      // backend returns { metadata: {...}, data: {...} }
       setMetadata(res.data.metadata);
       setDataBlock(res.data.data);
+
+      // Handle sensitive-model JS execution messages
+if (res.data.message === "JS program returned non-zero exit code") {
+  // JS failed: show only clean message
+  setError("JS program returned non-zero exit code");
+}
+else if (res.data.stdout) {
+  // JS succeeded: show stdout
+  setSuccess(res.data.stdout);
+}
+else if (res.data.message && (!res.data.data?.download_url || res.data.data.download_url === "")) {
+  // Other backend messages
+  setError(res.data.message);
+}
+
 
     } catch (err) {
       setError("Failed to load artifact details.");
@@ -63,10 +79,9 @@ export default function ArtifactDetails() {
     fetchArtifact();
   }, []);
 
-
-  // --------------------------
-  // ACTION HANDLERS (NO CHANGE)
-  // --------------------------
+  // ------------------------------------------------------------
+  // ACTION HANDLERS
+  // ------------------------------------------------------------
 
   const run = async (fn) => {
     setLoading(true);
@@ -87,17 +102,18 @@ export default function ArtifactDetails() {
     }
   };
 
+  // DOWNLOAD
   const handleDownload = () =>
     run(async () => {
-      if (!dataBlock?.url)
-        throw new Error("Backend did not provide a download URL.");
+      if (!dataBlock?.download_url)
+        throw new Error(
+          "Download blocked: Missing download URL. (Sensitive model may have failed JS validation.)"
+        );
 
-      // trigger real download without navigating away
-      const link = document.createElement('a');
-      link.href = dataBlock.url;
-      // Try to extract a filename from the URL, fallback to 'download'
-      const urlParts = dataBlock.url.split('/');
-      link.download = urlParts[urlParts.length - 1] || 'download';
+      const link = document.createElement("a");
+      link.href = dataBlock.download_url;
+      const urlParts = dataBlock.download_url.split("/");
+      link.download = urlParts[urlParts.length - 1] || "download";
       document.body.appendChild(link);
       link.click();
       document.body.removeChild(link);
@@ -105,48 +121,48 @@ export default function ArtifactDetails() {
       return "Downloading...";
     });
 
+  // GET COST
   const handleCost = () =>
     run(async () => {
       const res = await axios.get(API_ENDPOINTS.ARTIFACT_COST(type, id), {
         headers: { "X-Authorization": token },
       });
-
-      return res.data;  // return the pure object for pretty printing
-
+      return res.data;
     });
 
+  // RATE MODEL
   const handleRate = () =>
     run(async () => {
       if (type !== "model") throw new Error("Only models can be rated.");
-
       const res = await axios.get(API_ENDPOINTS.ARTIFACT_RATE(id), {
         headers: { "X-Authorization": token },
       });
-
       return res.data;
-
     });
 
+  // LICENSE CHECK
   const handleLicense = () =>
-  run(async () => {
-    const githubUrl = window.prompt("Enter a GitHub repository URL:");
-    if (!githubUrl) throw new Error("GitHub URL is required.");
-    // Validate GitHub repository URL format
-    const githubRepoRegex = /^https:\/\/github\.com\/[\w.-]+\/[\w.-]+(\/)?$/i;
-    if (!githubRepoRegex.test(githubUrl.trim())) {
-      throw new Error("Please enter a valid GitHub repository URL (e.g., https://github.com/owner/repo).");
-    }
+    run(async () => {
+      const githubUrl = window.prompt("Enter a GitHub repository URL:");
+      if (!githubUrl) throw new Error("GitHub URL is required.");
 
-    const res = await axios.post(
-      API_ENDPOINTS.ARTIFACT_LICENSE_CHECK(id),
-      { github_url: githubUrl },
-      { headers: { "X-Authorization": token } }
-    );
+      const regex = /^https:\/\/github\.com\/[\w.-]+\/[\w.-]+\/?$/i;
+      if (!regex.test(githubUrl.trim())) {
+        throw new Error(
+          "Please enter a valid GitHub repository URL (e.g., https://github.com/owner/repo)."
+        );
+      }
 
-    return res.data;
-  });
+      const res = await axios.post(
+        API_ENDPOINTS.ARTIFACT_LICENSE_CHECK(id),
+        { github_url: githubUrl },
+        { headers: { "X-Authorization": token } }
+      );
 
+      return res.data;
+    });
 
+  // LINEAGE
   const handleLineage = () =>
     run(async () => {
       const res = await axios.get(API_ENDPOINTS.ARTIFACT_LINEAGE(id), {
@@ -164,6 +180,17 @@ export default function ArtifactDetails() {
       return graph;
     });
 
+  // OPEN ORIGINAL SOURCE LINK (HUGGING FACE / GITHUB)
+  const handleOpenSourceLink = () =>
+    run(async () => {
+      if (!dataBlock?.url)
+        throw new Error("No source URL available for this artifact.");
+
+      window.open(dataBlock.url, "_blank", "noopener,noreferrer");
+      return "Opening source link...";
+    });
+
+
   return (
     <>
       <Navbar />
@@ -174,34 +201,71 @@ export default function ArtifactDetails() {
           <LoadingSpinner />
         ) : (
           <div className="card">
-            <p><strong>Name:</strong> {metadata.name}</p>
-            <p><strong>ID:</strong> {metadata.id}</p>
-            <p><strong>Type:</strong> {metadata.type}</p>
+            <p>
+              <strong>Name:</strong> {metadata.name}
+            </p>
+            <p>
+              <strong>ID:</strong> {metadata.id}
+            </p>
+            <p>
+              <strong>Type:</strong> {metadata.type}
+            </p>
 
+            {/* ACTION BUTTONS */}
             <button onClick={handleDownload} disabled={loading}>
               Download
             </button>
 
-            <button onClick={handleCost} disabled={loading} style={{ marginTop: "1rem" }}>
+            <button
+              onClick={handleCost}
+              disabled={loading}
+              style={{ marginTop: "1rem" }}
+            >
               Get Cost
             </button>
 
-            <button onClick={handleRate} disabled={loading} style={{ marginTop: "1rem" }}>
+            <button
+              onClick={handleRate}
+              disabled={loading}
+              style={{ marginTop: "1rem" }}
+            >
               Rate
             </button>
 
-            <button onClick={handleLicense} disabled={loading} style={{ marginTop: "1rem" }}>
+            <button
+              onClick={handleLicense}
+              disabled={loading}
+              style={{ marginTop: "1rem" }}
+            >
               Run License Check
             </button>
 
-            <button onClick={handleLineage} disabled={loading} style={{ marginTop: "1rem" }}>
+            <button
+              onClick={handleLineage}
+              disabled={loading}
+              style={{ marginTop: "1rem" }}
+            >
               View Lineage
             </button>
 
+            {/* NEW BUTTON — OPEN ORIGINAL SOURCE */}
+            <button
+              onClick={handleOpenSourceLink}
+              disabled={loading}
+              style={{
+                marginTop: "1rem",
+                backgroundColor: "#326ed1",
+              }}
+            >
+              Get Link
+            </button>
+
+            {/* OUTPUTS */}
             {success && (
               <div style={{ marginTop: "1rem" }}>
-                <SuccessBanner message={typeof success === "string" ? success : ""} />
-                {/* If success is JSON, show pretty box */}
+                <SuccessBanner
+                  message={typeof success === "string" ? success : ""}
+                />
                 {typeof success === "object" && renderJsonObject(success)}
               </div>
             )}
@@ -213,3 +277,4 @@ export default function ArtifactDetails() {
     </>
   );
 }
+
