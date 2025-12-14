@@ -54,9 +54,10 @@ jobs:
           PORT: 5000
           DEBUG: "False"
         run: |
-          ./run api &
-          echo "Waiting for API to start..."
+          ./run api > api.log 2>&1 &
           sleep 20
+          echo "====== API LOGS ======"
+          cat api.log
 
       # Pass env vars to web server + tests
       - name: Run Playwright tests
