@@ -29,24 +29,25 @@ jobs:
       - name: Setup Node.js 20 for frontend
         uses: actions/setup-node@v4
         with:
-          node-version: "20.19.0"     # <-- IMPORTANT: satisfies Vite 6
+          node-version: "20.19.0"
           cache: "npm"
           cache-dependency-path: "frontend/package-lock.json"
 
-      - name: Install frontend dependencies
+      - name: Install frontend deps
         working-directory: frontend
         run: npm ci
-
-      - name: Build frontend
-        working-directory: frontend
-        run: npm run build
 
       - name: Install Playwright browsers
         working-directory: frontend
         run: npx playwright install --with-deps
 
+      # CRITICAL: Pass env vars to web server + tests
       - name: Run Playwright tests
         working-directory: frontend
+        env:
+          DEFAULT_USER: ${{ secrets.DEFAULT_USER }}
+          DEFAULT_PASSWORD: ${{ secrets.DEFAULT_PASSWORD }}
+          VITE_API_URL: "http://localhost:5000"   # If needed for your fetch calls
         run: npx playwright test --reporter=list
 
  
