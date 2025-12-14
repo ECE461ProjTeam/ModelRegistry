@@ -196,7 +196,7 @@ def fetch_db_metrics(window: datetime, include_timeline: bool = False) -> list:
         rds_metrics = {
             "display_name": "Aurora Serverless DB Cluster",
             "id": DB_CLUSTER_IDENTIFIER,
-            "status": status,
+            "status": "ERROR",
             "observed_at": datetime.now(timezone.utc).isoformat(),
             "metrics": {"CPUUtilization": 0, "WriteLatency": 0},
             "timeline": {}
