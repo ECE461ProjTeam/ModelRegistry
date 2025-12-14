@@ -111,7 +111,7 @@ class Artifact(db.Model):
                     for subkey in self.ndjson[key]:
                         if self.ndjson[key][subkey] < 0.5:
                             return False
-                if self.ndjson[key] < 0.5:
+                elif self.ndjson[key] < 0.5:
                     return False
         return True
     
