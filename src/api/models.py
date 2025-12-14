@@ -67,10 +67,10 @@ class Artifact(db.Model):
                 self.ingestible = False
                 return
         
-        # try:
-        #     self.send_to_bucket()
-        # except Exception as e:
-        #     logger.error(f"Error sending artifact {self.id} to bucket: {e}")
+        try:
+            self.send_to_bucket()
+        except Exception as e:
+            logger.error(f"Error sending artifact {self.id} to bucket: {e}")
                 
         
     @staticmethod
