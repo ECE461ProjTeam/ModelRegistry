@@ -99,7 +99,7 @@ export default function SystemHealthDashboard() {
 
     const chartData = timeline[metric].map((point) => ({
       Timestamp: point.Timestamp,
-      Value: Number(point.Average || 0),
+      Value: Number(point.Average ?? point.Sum ?? 0),
     }));
 
     const COLORS = ["#22c55e", "#f59e0b", "#326ed1", "#ef4444", "#8b5cf6", "#14b8a6"];
