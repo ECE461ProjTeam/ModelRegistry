@@ -461,8 +461,11 @@ def compute_tree_score_for_model(lineage_data: Dict[str, Any],
     
     # Collect net_scores from all artifacts in the tree
     net_scores = []
+    # Fetch all artifacts in one query to avoid N+1 problem
+    artifacts = Artifact.query.filter(Artifact.id.in_(artifact_ids)).all()
+    artifact_map = {artifact.id: artifact for artifact in artifacts}
     for aid in artifact_ids:
-        artifact = Artifact.query.filter_by(id=aid).first()
+        artifact = artifact_map.get(aid)
         if artifact and artifact.ndjson:
             net_score = artifact.ndjson.get("net_score")
             if net_score is not None:
