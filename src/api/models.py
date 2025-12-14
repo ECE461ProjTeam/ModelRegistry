@@ -122,7 +122,7 @@ class Artifact(db.Model):
             # Check if lineage data exists
             lineage_data = self.ndjson.get('lineage', {})
             if not lineage_data:
-                logger.warning(f"No lineage data found for artifact {self.id}, cannot recompute tree_score")
+                logger.info(f"No lineage data found for artifact {self.id}, keeping existing tree_score")
                 return True  # Return success but don't update tree_score
             
             # Compute tree_score from lineage
@@ -130,12 +130,20 @@ class Artifact(db.Model):
                 from src.api.lineage import compute_tree_score_for_model
                 
                 result = compute_tree_score_for_model(lineage_data, self.id, db.session)
+                model_count = result["model_count"]
                 new_tree_score = result["tree_score"]
                 
-                logger.info(f"Recomputed tree_score: {new_tree_score:.3f} from {result['model_count']} related models")
+                # Check if this is meaningful update
+                old_tree_score = self.ndjson.get('tree_score', 0.0)
+                
+                if model_count == 1:
+                    # First re-rating: Replace placeholder 0.75 with actual net_score
+                    logger.info(f"First re-rating: updating tree_score from placeholder {old_tree_score:.3f} to actual net_score {new_tree_score:.3f}")
+                else:
+                    # Subsequent re-rating: Compute from lineage tree
+                    logger.info(f"Recomputed tree_score: {new_tree_score:.3f} from {model_count} related models")
                 
                 # Update tree_score in ndjson
-                old_tree_score = self.ndjson.get('tree_score', 0.0)
                 self.ndjson['tree_score'] = new_tree_score
                 
                 # Recalculate net_score since tree_score changed
@@ -146,7 +154,6 @@ class Artifact(db.Model):
                 logger.info(f"Updated scores - tree_score: {old_tree_score:.3f} -> {new_tree_score:.3f}, net_score: {old_net_score:.3f} -> {new_net_score:.3f}")
                 
                 # CRITICAL: Mark ndjson as modified so SQLAlchemy knows to UPDATE it
-                # Without this, in-place dict modifications aren't detected
                 flag_modified(self, 'ndjson')
                 
             except Exception as e:
