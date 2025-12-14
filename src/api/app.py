@@ -434,7 +434,12 @@ def ArtifactCreate(artifact_type):
 @app.route('/artifact/model/<id>/rate', methods=['GET'])
 @check_permissions("search")
 def ModelArtifactRate(id):
-    """Get ratings for this model artifact. (BASELINE)."""
+    """Get ratings for this model artifact. (BASELINE).
+    
+    This endpoint handles two scenarios:
+    1. Initial rating (ndjson empty): Computes all metrics, sets tree_score = net_score
+    2. Re-rating (ndjson populated): Recomputes tree_score from lineage graph, recalculates net_score
+    """
     
     if id is None:
         return jsonify({'error': 'There is missing field(s) in the artifact_id or it is formed improperly, or is invalid.'}), 400
@@ -446,12 +451,27 @@ def ModelArtifactRate(id):
     if art is None or art.type != "model":
         return jsonify({'error': 'Artifact does not exist.'}), 404
 
-    if not art.rate():
+    # Determine if this is initial rating or re-rating
+    is_initial = (art.ndjson == {} or art.ndjson is None)
+    logger.info(f"Rating artifact {id} - {'Initial rating' if is_initial else 'Re-rating (computing from lineage)'}")
+
+    try:
+        if not art.rate():
+            logger.error(f"Rating failed for artifact {id}")
+            return jsonify({'error': 'The artifact rating system encountered an error while computing at least one metric.'}), 500
+        
+        # Commit the updated ndjson to database
+        db.session.commit()
+        logger.info(f"Successfully rated artifact {id} and committed to database")
+        
+    except Exception as e:
+        db.session.rollback()
+        logger.error(f"Error during rating of artifact {id}: {e}")
         return jsonify({'error': 'The artifact rating system encountered an error while computing at least one metric.'}), 500
 
     if not art.check_ingestible():
-        logger.error(f"Artifact {id} is not ingestible after rating.")
-        # return jsonify({'message': 'Artifact is not ingestible due to the disqualified rating.'}), 424
+        logger.warning(f"Artifact {id} is not ingestible after rating (scores below threshold)")
+        # Note: Not returning 424 as per original code comment
 
     return jsonify(art.ndjson), 200
 
