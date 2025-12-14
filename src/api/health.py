@@ -140,29 +140,8 @@ def fetch_db_metrics(window: datetime, include_timeline: bool = False) -> list:
         - WriteLatency: Average
     '''
     components = []
-    connectivity = "unknown"
-    # 1. Check DB Connectivity
-    # If using TestConfig, return connection as connected without actual check
-    if os.environ.get("DEBUG") == "True":
-        logger.debug("TestConfig detected, skipping actual DB connectivity check.")
-        connectivity = "connected"
-    else:
-        logger.debug("Checking actual DB connectivity.")
-        try:
-            conn = psycopg2.connect(
-                dbname="postgres",
-                user=os.environ.get("DB_USERNAME"),
-                password=os.environ.get("DB_PASSWORD"),
-                host=os.environ.get("DB_HOST"),
-                connect_timeout=3
-            )
-            conn.close()
-            connectivity = "connected"
-        except Exception as e:
-            logger.error(f"DB connectivity error: {e}")
-            connectivity = f"error: {e}"
-    
-    # 2. Fetch RDS Metrics from CloudWatch (If using Aurora Serverlessv2)
+
+    # 1. Fetch RDS Metrics from CloudWatch (If using Aurora Serverlessv2)
     try:
         cloudwatch = boto3.client("cloudwatch", region_name=AWS_REGION)
         cpu_result = cloudwatch.get_metric_statistics(
@@ -194,7 +173,8 @@ def fetch_db_metrics(window: datetime, include_timeline: bool = False) -> list:
         if write_latency_result.get("Datapoints"):
             avg_write_latency = sum(dp["Average"] for dp in write_latency_result["Datapoints"]) / len(write_latency_result["Datapoints"])
         
-        status = "OK" if connectivity == "connected" else "Critical"
+        metrics_present = bool(cpu_result.get("Datapoints") and write_latency_result.get("Datapoints"))
+        status = "OK" if metrics_present else "Critical"
 
         rds_metrics = {
             "display_name": f"Aurora Serverless DB Cluster",
@@ -202,7 +182,6 @@ def fetch_db_metrics(window: datetime, include_timeline: bool = False) -> list:
             "status": status,
             "observed_at": observed_at,
             "metrics": {
-                "Connectivity": connectivity,
                 "CPUUtilization": avg_cpu,
                 "WriteLatency": avg_write_latency
             },
@@ -217,9 +196,9 @@ def fetch_db_metrics(window: datetime, include_timeline: bool = False) -> list:
         rds_metrics = {
             "display_name": "Aurora Serverless DB Cluster",
             "id": DB_CLUSTER_IDENTIFIER,
-            "status": "Critical" if connectivity != "connected" else "OK",
+            "status": status,
             "observed_at": datetime.now(timezone.utc).isoformat(),
-            "metrics": {"Connectivity": connectivity, "CPUUtilization": 0, "WriteLatency": 0},
+            "metrics": {"CPUUtilization": 0, "WriteLatency": 0},
             "timeline": {}
         }
         components.append(rds_metrics)
@@ -277,7 +256,7 @@ def fetch_alb_metrics(load_balancer_arns: list, window: datetime, include_timeli
             if avg_response_time is None:
                 status = "Unknown"
             else:
-                status = "OK" if avg_response_time < 1 else "Warning" if avg_response_time < 3 else "Critical"
+                status = "OK" if avg_response_time < 3 else "Warning" if avg_response_time < 5 else "Critical"
             
             alb_metrics = {
                 "id": alb_arn,
