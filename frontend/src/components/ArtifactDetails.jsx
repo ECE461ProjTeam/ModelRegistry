@@ -1,5 +1,4 @@
 // frontend/src/components/ArtifactDetails.jsx
-
 import React, { useEffect, useState } from "react";
 import { useParams } from "react-router-dom";
 import Navbar from "./Navbar.jsx";
@@ -14,13 +13,13 @@ export default function ArtifactDetails() {
 
   const [metadata, setMetadata] = useState(null);
   const [dataBlock, setDataBlock] = useState(null);
-  const [backendMsg, setBackendMsg] = useState(""); // sensitive model response message
   const [error, setError] = useState("");
   const [success, setSuccess] = useState("");
   const [loading, setLoading] = useState(false);
 
   const token = localStorage.getItem("token");
 
+  // Pretty-print JSON
   function renderJsonObject(obj) {
     if (!obj || typeof obj !== "object") return String(obj);
 
@@ -54,9 +53,25 @@ export default function ArtifactDetails() {
 
       setMetadata(res.data.metadata);
       setDataBlock(res.data.data);
-      setBackendMsg(res.data.message || "");
+
+      // Handle sensitive-model JS execution messages
+if (res.data.message === "JS program returned non-zero exit code") {
+  // JS failed: show only clean message
+  setError("JS program returned non-zero exit code");
+}
+else if (res.data.stdout) {
+  // JS succeeded: show stdout
+  setSuccess(res.data.stdout);
+}
+else if (res.data.message && (!res.data.data?.download_url || res.data.data.download_url === "")) {
+  // Other backend messages
+  setError(res.data.message);
+}
+
+
     } catch (err) {
       setError("Failed to load artifact details.");
+      setMetadata(null);
     }
   };
 
@@ -64,72 +79,49 @@ export default function ArtifactDetails() {
     fetchArtifact();
   }, []);
 
+  // ------------------------------------------------------------
+  // ACTION HANDLERS
+  // ------------------------------------------------------------
 
-  // Generic helper for action buttons (Cost, Rate, Lineage, License...)
   const run = async (fn) => {
     setLoading(true);
     setError("");
     setSuccess("");
-
     try {
       const msg = await fn();
       setSuccess(msg);
     } catch (err) {
-      let msg =
+      const msg =
         err.response?.data?.description ||
         err.response?.data?.message ||
         err.message ||
         "Action failed.";
-
-      if (msg.includes("AccessDenied") || msg.includes("Access Denied")) {
-        msg = "S3 file exists, but access is restricted (private bucket).";
-      }
-
       setError(msg);
     } finally {
       setLoading(false);
     }
   };
 
-  // Download button logic
-  // Sensitive models: backend may return empty URL
-  // Normal models: backend gives direct download_url
-
+  // DOWNLOAD
   const handleDownload = () =>
-  run(async () => {
-    if (!dataBlock) throw new Error("No artifact data available.");
+    run(async () => {
+      if (!dataBlock?.download_url)
+        throw new Error(
+          "Download blocked: Missing download URL. (Sensitive model may have failed JS validation.)"
+        );
 
-    // Fetch fresh metadata from backend to check JS status
-    const res = await axios.get(
-      API_ENDPOINTS.ARTIFACT_BY_TYPE_ID(type, id),
-      { headers: { "X-Authorization": token } }
-    );
+      const link = document.createElement("a");
+      link.href = dataBlock.download_url;
+      const urlParts = dataBlock.download_url.split("/");
+      link.download = urlParts[urlParts.length - 1] || "download";
+      document.body.appendChild(link);
+      link.click();
+      document.body.removeChild(link);
 
-    const payload = res.data;
+      return "Downloading...";
+    });
 
-    // If backend says JS failed → show error message instead of downloading
-    if (res.status === 202 || res.status === 203) {
-      throw new Error(payload.message || "Download blocked by JS policy.");
-    }
-
-    // If no download URL → error
-    if (!payload.data?.download_url) {
-      throw new Error("Download URL not available.");
-    }
-
-    // Perform real download
-    const url = payload.data.download_url;
-    const a = document.createElement("a");
-    a.href = url;
-    a.download = url.split("/").pop();
-    document.body.appendChild(a);
-    a.click();
-    a.remove();
-
-    return "Downloading...";
-  });
-
-
+  // GET COST
   const handleCost = () =>
     run(async () => {
       const res = await axios.get(API_ENDPOINTS.ARTIFACT_COST(type, id), {
@@ -138,6 +130,7 @@ export default function ArtifactDetails() {
       return res.data;
     });
 
+  // RATE MODEL
   const handleRate = () =>
     run(async () => {
       if (type !== "model") throw new Error("Only models can be rated.");
@@ -147,37 +140,56 @@ export default function ArtifactDetails() {
       return res.data;
     });
 
+  // LICENSE CHECK
   const handleLicense = () =>
     run(async () => {
       const githubUrl = window.prompt("Enter a GitHub repository URL:");
       if (!githubUrl) throw new Error("GitHub URL is required.");
-      const re = /^https:\/\/github\.com\/[\w.-]+\/[\w.-]+\/?$/i;
-      if (!re.test(githubUrl.trim()))
-        throw new Error("Please enter a valid GitHub repository URL.");
+
+      const regex = /^https:\/\/github\.com\/[\w.-]+\/[\w.-]+\/?$/i;
+      if (!regex.test(githubUrl.trim())) {
+        throw new Error(
+          "Please enter a valid GitHub repository URL (e.g., https://github.com/owner/repo)."
+        );
+      }
 
       const res = await axios.post(
         API_ENDPOINTS.ARTIFACT_LICENSE_CHECK(id),
         { github_url: githubUrl },
         { headers: { "X-Authorization": token } }
       );
+
       return res.data;
     });
 
+  // LINEAGE
   const handleLineage = () =>
     run(async () => {
       const res = await axios.get(API_ENDPOINTS.ARTIFACT_LINEAGE(id), {
         headers: { "X-Authorization": token },
       });
+
       const graph = res.data;
+
       if (!graph?.nodes || graph.nodes.length === 0)
         return "No lineage available.";
+
       if (graph.nodes.length === 1)
         return "This model has no lineage relationships.";
+
       return graph;
     });
 
-  // Download button enabled only if URL exists
-  const isDownloadAllowed = dataBlock?.download_url;
+  // OPEN ORIGINAL SOURCE LINK (HUGGING FACE / GITHUB)
+  const handleOpenSourceLink = () =>
+    run(async () => {
+      if (!dataBlock?.url)
+        throw new Error("No source URL available for this artifact.");
+
+      window.open(dataBlock.url, "_blank", "noopener,noreferrer");
+      return "Opening source link...";
+    });
+
 
   return (
     <>
@@ -199,39 +211,61 @@ export default function ArtifactDetails() {
               <strong>Type:</strong> {metadata.type}
             </p>
 
-            {backendMsg && (
-              <p style={{ color: "#60a5fa", marginTop: "0.5rem" }}>
-                <strong>Backend: </strong>
-                {backendMsg}
-              </p>
-            )}
-
-            <button
-              onClick={handleDownload}
-              disabled={loading || !isDownloadAllowed}
-            >
+            {/* ACTION BUTTONS */}
+            <button onClick={handleDownload} disabled={loading}>
               Download
             </button>
 
-            <button onClick={handleCost} disabled={loading} style={{ marginTop: "1rem" }}>
+            <button
+              onClick={handleCost}
+              disabled={loading}
+              style={{ marginTop: "1rem" }}
+            >
               Get Cost
             </button>
 
-            <button onClick={handleRate} disabled={loading} style={{ marginTop: "1rem" }}>
+            <button
+              onClick={handleRate}
+              disabled={loading}
+              style={{ marginTop: "1rem" }}
+            >
               Rate
             </button>
 
-            <button onClick={handleLicense} disabled={loading} style={{ marginTop: "1rem" }}>
+            <button
+              onClick={handleLicense}
+              disabled={loading}
+              style={{ marginTop: "1rem" }}
+            >
               Run License Check
             </button>
 
-            <button onClick={handleLineage} disabled={loading} style={{ marginTop: "1rem" }}>
+            <button
+              onClick={handleLineage}
+              disabled={loading}
+              style={{ marginTop: "1rem" }}
+            >
               View Lineage
             </button>
 
+            {/* NEW BUTTON — OPEN ORIGINAL SOURCE */}
+            <button
+              onClick={handleOpenSourceLink}
+              disabled={loading}
+              style={{
+                marginTop: "1rem",
+                backgroundColor: "#326ed1",
+              }}
+            >
+              Get Link
+            </button>
+
+            {/* OUTPUTS */}
             {success && (
               <div style={{ marginTop: "1rem" }}>
-                <SuccessBanner message={typeof success === "string" ? success : ""} />
+                <SuccessBanner
+                  message={typeof success === "string" ? success : ""}
+                />
                 {typeof success === "object" && renderJsonObject(success)}
               </div>
             )}
@@ -243,3 +277,4 @@ export default function ArtifactDetails() {
     </>
   );
 }
+
